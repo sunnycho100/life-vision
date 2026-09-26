@@ -21,6 +21,8 @@ Note: the Ultralytics GitHub title now lists a "YOLO27" as well (unverified, not
 
 Pool-specific research exists and all of it is YOLO based: DrownACB-YOLO adds a "transition" label between swimming and drowned, Swimming-YOLO uses deformable convolution for crowded pools, and YOLO11-LiB reports 94.1% mAP on the drowning class at 2.02M parameters. All of these use pool or underwater datasets, not a home backyard setup.
 
+**YOLO11-LiB has public weights and data.** Its repo [Mibugi/Drowning-detection](https://github.com/Mibugi/Drowning-detection) contains the trained model (`Module/LiB-YOLO.pt`, 4.5 MB), the base `yolo11n.pt`, training code, and a YOLO-format dataset zip ("Drowning Detect v6", about 100 MB, extended version on Roboflow). It is built on YOLO11n, so it is also AGPL-bound. The repo has **no license file**, which by default means no permission to reuse (unverified whether the Roboflow dataset has its own license). Class names and camera views not checked yet. Good candidate as a starting checkpoint and as a public baseline to compare against.
+
 ## Open-vocabulary labelers (offline only)
 
 | Model | License | Use |

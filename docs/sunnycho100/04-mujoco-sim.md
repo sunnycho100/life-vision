@@ -13,6 +13,8 @@ python3 -m venv .venv && .venv/bin/pip install mujoco numpy
 ```
 Tested with MuJoCo 3.14.0, NumPy 2.5.3, Python 3.12.
 
+Add `--video` to also render one MP4 per motion to `data/sim_samples/videos/` from a corner "cctv" camera (needs ffmpeg). The scene has a visual-only pool: white walls and a see-through blue water box, 10 x 5 m, 2 m deep. The pool is only drawn, it has no collision and does not change the physics (the keypoint output is identical with or without it). Videos are not committed (`*.mp4` is gitignored).
+
 ## Water model
 
 | Part | How | Parameters |
@@ -64,7 +66,7 @@ How we got here: the first version used one buoyancy number for the whole body. 
 
 ## Limitations
 - Fluid drag applies everywhere, also above the water (MuJoCo has one global medium). Arms out of the water get too much drag.
-- No splash, waves, or surface visuals. This is motion data, not video.
+- No splash, waves, or refraction. The rendered pool is a flat tinted box, good for checking motions and demos, not realistic enough for detector training.
 - One adult-sized body. A child needs a scaled model (shorter limbs, bigger head ratio).
 - Motions are hand-scripted sine waves, not motion capture. Our real footage should be used to check them.
 - Keypoints are 3D world coordinates. To train on camera views we must project them into an overhead camera (next step).

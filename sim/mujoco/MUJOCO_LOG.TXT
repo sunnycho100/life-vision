@@ -1,0 +1,102 @@
+WARNING Sat Sep 26 18:54:32 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:54:32 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:54:32 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:54:32 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:54:32 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:25 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:25 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:25 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:25 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:25 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:32 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:32 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:32 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:32 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:32 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:32 2026: Nan, Inf or huge value in QACC at DOF 40. The simulation is unstable. Time = 0.0333.
+
+WARNING Sat Sep 26 18:55:45 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:45 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:45 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:45 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:55:45 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:56:02 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:56:02 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:56:02 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:56:02 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+
+WARNING Sat Sep 26 18:56:02 2026: Attach conflict when attaching 'Humanoid', policy is 'warning'
+timestep: parent has 0.00416667 (default), child has 0.005, keeping parent value
+zfar: parent has 50 (default), child has 30, keeping parent value
+

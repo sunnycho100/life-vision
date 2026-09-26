@@ -15,6 +15,23 @@ Tested with MuJoCo 3.14.0, NumPy 2.5.3, Python 3.12.
 
 Add `--video` to also render one MP4 per motion to `data/sim_samples/videos/` from a corner "cctv" camera (needs ffmpeg). The scene has a visual-only pool: white walls and a see-through blue water box, 10 x 5 m, 2 m deep. The pool is only drawn, it has no collision and does not change the physics (the keypoint output is identical with or without it). Videos are not committed (`*.mp4` is gitignored).
 
+## Multi-person pool scene
+[`sim/mujoco/pool_scene.py`](../../sim/mujoco/pool_scene.py) puts 5 people in one pool, 5 seconds by default (`--seconds` to change):
+
+| Person | Motion | Where | Distress |
+|---|---|---|---|
+| 0 | stand (arms sway) | shallow end | 0 |
+| 1 | normal_swim | shallow end | 0 |
+| 2 | float | deep end | 0 |
+| 3 | idr (instinctive drowning response) | deep end | 1 |
+| 4 | collapse (stands 1 s, then folds under) | shallow end | 1 |
+
+- Pool: shallow end 0.9 m (`--depth`, about waist deep so the upper body shows), deep end 2 m.
+- Looks: random skin tone, hair, swimwear, and sometimes a rash guard per person (`--seed`). These are colors on the capsule body, not a real human mesh.
+- Standing uses stiff hip and knee gains plus a scripted upright torque (no real balance controller).
+- Output: `data/sim_samples/pool_scene.npz` (keypoints per person), `pool_scene.json`, `videos/pool_scene.mp4`.
+- MuJoCo prints "Attach conflict" warnings when combining 5 copies of the model. They are harmless.
+
 ## Water model
 
 | Part | How | Parameters |

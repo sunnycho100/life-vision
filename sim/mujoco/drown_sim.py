@@ -84,7 +84,7 @@ def apply_buoyancy(m, d, geoms, volumes, lung_liters, lung_vol):
     """Add upward force rho*g*V*frac at each geom center, plus lung air at the chest."""
     g = -m.opt.gravity[2]
     for gid, vol in zip(geoms, volumes):
-        if m.geom(gid).name in LUNG_GEOMS:  # lung air spread over chest geoms by volume
+        if m.geom(gid).name.rsplit("/", 1)[-1] in LUNG_GEOMS:  # lung air spread over chest geoms by volume
             vol_eff = TISSUE_BUOYANCY * vol + lung_liters / 1000 * vol / lung_vol
         else:
             vol_eff = TISSUE_BUOYANCY * vol
@@ -158,7 +158,7 @@ def run_motion(m, name, seconds, fps, seed, video=None):
 
     geoms = [g for g in range(m.ngeom) if m.geom_bodyid[g] != 0]
     volumes = [geom_volume(m, g) for g in geoms]
-    lung_vol = sum(v for g, v in zip(geoms, volumes) if m.geom(g).name in LUNG_GEOMS)
+    lung_vol = sum(v for g, v in zip(geoms, volumes) if m.geom(g).name.rsplit("/", 1)[-1] in LUNG_GEOMS)
     joint_names = [m.joint(j).name for j in range(1, m.njnt)]  # skip free root
     qadr = {n: m.joint(n).qposadr[0] for n in joint_names}
     vadr = {n: m.joint(n).dofadr[0] for n in joint_names}

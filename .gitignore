@@ -1,0 +1,25 @@
+# Videos and datasets live in shared storage, not git
+data/raw/
+data/processed/
+*.mp4
+*.mov
+*.avi
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+
+.DS_Store

@@ -1,0 +1,63 @@
+{
+  "fps": 30,
+  "seconds": 20,
+  "keypoints": [
+    "head",
+    "torso",
+    "pelvis",
+    "upper_arm_right",
+    "lower_arm_right",
+    "hand_right",
+    "upper_arm_left",
+    "lower_arm_left",
+    "hand_left",
+    "thigh_right",
+    "shin_right",
+    "foot_right",
+    "thigh_left",
+    "shin_left",
+    "foot_left"
+  ],
+  "motions": {
+    "normal_swim": {
+      "distress_label": 0,
+      "frames": 600,
+      "head_z_start": -0.051,
+      "head_z_end": -0.064,
+      "head_z_min": -0.089,
+      "pct_frames_head_underwater": 0.0,
+      "first_underwater_s": null,
+      "horizontal_travel_m": 5.03
+    },
+    "float": {
+      "distress_label": 0,
+      "frames": 600,
+      "head_z_start": -0.046,
+      "head_z_end": -0.024,
+      "head_z_min": -0.081,
+      "pct_frames_head_underwater": 0.0,
+      "first_underwater_s": null,
+      "horizontal_travel_m": 0.327
+    },
+    "idr": {
+      "distress_label": 1,
+      "frames": 600,
+      "head_z_start": 0.042,
+      "head_z_end": -0.125,
+      "head_z_min": -0.125,
+      "pct_frames_head_underwater": 7.2,
+      "first_underwater_s": 18.13,
+      "horizontal_travel_m": 0.263
+    },
+    "silent_sink": {
+      "distress_label": 1,
+      "frames": 600,
+      "head_z_start": 0.043,
+      "head_z_end": -1.838,
+      "head_z_min": -1.854,
+      "pct_frames_head_underwater": 93.8,
+      "first_underwater_s": 1.23,
+      "horizontal_travel_m": 1.134
+    }
+  }
+}

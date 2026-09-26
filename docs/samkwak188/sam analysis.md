@@ -283,9 +283,63 @@ For any later deployment, separately validate coverage, outages, alert delivery,
 - Who responds to an alert and whether that response is realistically immediate.
 - Whether processing is local, and what clips are retained.
 
-## 13. Review provenance
+## 13. Proposed YOLO training and video pipeline
+
+The team's proposed direction is to fine-tune a YOLO detector on images containing babies and adults, then apply it to video footage. This is a practical starting point for person detection. The model version, class definitions, dataset, and hardware have not yet been selected or validated.
+
+### Separate detection from age classification
+
+Detecting people of different ages does not require predicting their ages. Start with a single `person` class and include representative adults and children in the training data. This directly tests whether people remain detectable in the intended pool-camera view.
+
+| Option | Benefit | Limitation | Recommendation |
+|---|---|---|---|
+| One `person` class | Pools training examples and keeps the first task focused on finding people. | Does not provide an age category. | Recommended baseline. |
+| Separate baby/child/adult classes | Could support an explicitly age-dependent feature. | Requires defensible category definitions and sufficient examples; distant or submerged bodies may not provide reliable age evidence. | Consider only after establishing a strong person-detection baseline and a concrete need. |
+
+“Baby” is not interchangeable with toddler or child. Define the target population and annotation rules before collecting labels. Apparent body size alone is insufficient: distance and perspective change image size, and pool footage often hides most of the body. Do not guess age from ambiguous images. If age categories are added, keep uncertain age information separate from the person's existence and tracking identity. An `unknown` age state requires an explicit policy; it is not automatically provided by a detector's confidence score.
+
+**Never suppress an alert because a detection is classified as an adult.** Adult presence also does not establish active supervision. If all people receive the same alert logic, age classification adds complexity without an immediate operational benefit.
+
+### Training data and annotation
+
+Prefer representative frames from the intended camera setup over a large collection of unrelated baby and adult portraits. Generic images can supplement the dataset, but do not establish performance on small, partially visible swimmers.
+
+- Include heads and partial bodies in water, as well as full bodies approaching, entering, and leaving the pool.
+- Cover different distances, viewpoints, lighting, splashes, reflections, crowded scenes, and occlusions.
+- Include negative images such as empty pools, toys, reflections, and other objects that could trigger false detections.
+- Annotate each visible person with bounding boxes using a consistent written policy. Specify how to handle truncation, partial visibility, and examples too ambiguous to label. Do not invent the location of a fully hidden person.
+- Keep consent, usage permissions, source information, and dataset versions alongside the label records. Follow the recording and storage constraints in Section 11.
+
+Sample video frames without flooding the dataset with near-duplicates. **Split entire recording sessions before extracting training and test frames.** Randomly distributing neighboring frames across splits makes evaluation unrealistically easy. Where possible, hold out people, camera positions, and pools as well. If the available footage cannot support those splits, state that limitation.
+
+### Applying the model to video
+
+```text
+Video frames → YOLO person detections → person tracker
+             → persistent event rules → alert and replay
+```
+
+Fine-tuning on still images teaches the detector to locate the labeled objects. Running it on successive frames does not by itself establish consistent identity, temporal behavior, or underwater duration. The tracker associates detections over time; the separate event engine maintains last-seen information, observed exits, and unresolved incidents as described in Section 6.
+
+YOLO detections do not establish drowning or whether an airway is above water. A submerged person may remain detectable, while someone above water may be missed. Adding baby/adult classes does not resolve that ambiguity. Describe the prototype's output as the observable event it actually measures.
+
+### Recommended experiment order
+
+1. Run a pretrained person detector on representative pool clips before investing in training. Record misses, false detections, and inference speed on the actual hardware.
+2. Label a focused development dataset containing the observed failure cases and ordinary negative examples.
+3. Fine-tune a single-class person detector, then compare it with the pretrained baseline on the same untouched test recordings.
+4. Connect tracking and event logic. Evaluate complete incidents as well as frame-level detections; better bounding boxes do not automatically mean fewer false alerts.
+5. Add age categories only if they change a justified feature. Measure age confusion separately from person-detection recall and evaluate whether the additional task degrades detection or tracking.
+
+Report person misses by visibility, distance, and other relevant conditions, along with false detections, event recall, false alerts per hour, and end-to-end delay. If reliable age labels exist, report performance across age groups even for the single-class model: one class does not eliminate the need to check whether children are missed more often.
+
+Select the YOLO implementation and model size after measuring quality and runtime on the available hardware. Check the selected code and weights' licenses before redistribution or deployment. This section proposes an experiment plan; no YOLO training or benchmark has been performed in this repository.
+
+## 14. Review provenance
 
 This document distinguishes repository observations, externally documented capabilities, and proposed engineering choices. No benchmark, clinical validation, certification, or real-world safety claim is implied. External source links were checked during the review; implementation-specific results remain to be collected.
+
+Section 13 was added after the independent Claude review below, following the team's proposed YOLO direction. It was not part of that Claude review.
 
 ### Independent Claude review and disposition
 

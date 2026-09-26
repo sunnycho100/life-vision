@@ -25,7 +25,7 @@ The strongest project is not the one with the most models. It is the one that de
 
 The reviewed commit contains thirteen Markdown documents and `.gitignore`, including five placeholder member-research READMEs. There is no application code, model checkpoint, dependency manifest, dataset, or executable test suite. Consequently, this review establishes design risks, not observed software defects or measured performance.
 
-The main inputs are [the technical summary](technical-summary.md), [research notes](research-notes.md), and the folder READMEs.
+The main inputs are [the technical summary](../technical-summary.md), [research notes](../research-notes.md), and the folder READMEs.
 
 There are two competing plans:
 

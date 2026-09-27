@@ -75,7 +75,7 @@ Tracking also writes `data/sim_scenarios/eval/<scenario>.<detector>.tracks.json`
 Stock RF-DETR-N (Apache 2.0, runs locally) sees the capsule people far better than stock YOLO, but with the default tracker it showed 18 IDs for 4 people: boxes flicker, head-only duplicate boxes get their own IDs, and every re-detection starts a new ID.
 
 Edge logic (`--edge` in `sim/eval_detectors.py`):
-1. Drop a box that sits mostly (70%) inside a bigger box (head-only or body-part duplicates).
+1. Clean the raw boxes: NMS at IoU 0.6 (RF-DETR returns some people twice), drop a box that contains 2+ other boxes (one box around two overlapping people), and drop a small box mostly inside a much bigger one (head-only or arm-only box).
 2. ByteTrack needs 3 consecutive frames to start an ID and keeps lost people 5 s.
 3. ID stitching: a new track within 3 box-diagonals of where someone was lost, within 5 s, gets their old ID.
 4. A lost person's last box is held for 1 s (the "missing" state).
@@ -95,6 +95,8 @@ Held-out `resurface`, 4 real people:
 .venv/bin/python sim/eval_detectors.py --scenario resurface --detector runs/sim_rfdetr/checkpoint_best_ema.pth --track --edge --video
 ```
 The fine-tuned checkpoint is 121 MB, too big for git; regenerate it with the script.
+
+Fine-tuned RF-DETR-N + edge logic on every scenario (IDs shown / real people, ID switches): baseline 5/5, 0 · resurface 4/4, 0 · crossing 4/4, 0 · silent_sink_busy 5/5, 0 · entry 3/3, 0. Precision and recall 0.997 to 1.00 everywhere. An earlier containment-only rule dropped one of two overlapping people in `crossing` (recall 0.74); the three-pass cleanup above fixed that.
 
 ## How the sim helps with real footage
 

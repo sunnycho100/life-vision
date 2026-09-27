@@ -87,21 +87,29 @@ def make_detector(name, conf):
     return det
 
 
-def suppress_contained(boxes, scores, thr=0.7):
-    """Drop a box when most of it (thr of its area) sits inside a bigger box: head-only or
-    body-part duplicates of one person."""
+def clean_boxes(boxes, scores, nms_iou=0.6, inside=0.7, part_ratio=0.4):
+    """Three passes over raw detections, for one person class:
+    1. NMS: of two boxes with IoU >= nms_iou keep the higher score (RF-DETR has no NMS, so it
+       sometimes returns the same person twice).
+    2. Group boxes: drop a box that contains 2+ other boxes (one box around two people who overlap).
+    3. Part boxes: drop a box mostly inside a much bigger one (a head-only or arm-only box)."""
+    boxes, scores = np.asarray(boxes, float).reshape(-1, 4), np.asarray(scores, float)
+    if not len(boxes):
+        return boxes, scores
+    area = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+
+    def frac_inside(i, j):  # share of box i's area that lies inside box j
+        b, o = boxes[i], boxes[j]
+        ix = max(0, min(b[2], o[2]) - max(b[0], o[0])); iy = max(0, min(b[3], o[3]) - max(b[1], o[1]))
+        return ix * iy / (area[i] + 1e-9)
+
     keep = []
-    area = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) if len(boxes) else []
-    for i, b in enumerate(boxes):
-        inside = False
-        for j, o in enumerate(boxes):
-            if j != i and area[j] > area[i]:
-                ix = max(0, min(b[2], o[2]) - max(b[0], o[0])); iy = max(0, min(b[3], o[3]) - max(b[1], o[1]))
-                if ix * iy >= thr * area[i]:
-                    inside = True
-                    break
-        if not inside:
+    for i in np.argsort(-scores):  # 1. NMS
+        if all(iou(boxes[i], boxes[k]) < nms_iou for k in keep):
             keep.append(i)
+    keep = [j for j in keep if sum(frac_inside(i, j) >= inside for i in keep if i != j and area[i] < area[j]) < 2]  # 2.
+    keep = [i for i in keep if not any(frac_inside(i, j) >= inside and area[i] < part_ratio * area[j]
+                                       for j in keep if j != i)]  # 3.
     return boxes[keep], scores[keep]
 
 
@@ -147,7 +155,7 @@ def main():
     ap.add_argument("--video", action="store_true", help="write an annotated MP4 (needs --track)")
     ap.add_argument("--no-gt", action="store_true", help="leave the white ground-truth boxes out of the MP4")
     ap.add_argument("--edge", action="store_true",
-                    help="edge logic: drop contained boxes, tracker needs 3 frames to start an ID and keeps lost "
+                    help="edge logic: NMS, drop group and part boxes, tracker needs 3 frames to start an ID and keeps lost "
                          "people 5 s, stable IDs stitched across tracker restarts, last box held 1 s")
     args = ap.parse_args()
     every = 1 if args.track else args.every
@@ -189,7 +197,7 @@ def main():
             continue
         boxes, scores = det(img)
         if args.edge:
-            boxes, scores = suppress_contained(np.asarray(boxes).reshape(-1, 4), np.asarray(scores))
+            boxes, scores = clean_boxes(boxes, scores)
         people = fr["people"]
         g_boxes = [p["bbox"] for p in people]
         pairs = match(g_boxes, boxes)

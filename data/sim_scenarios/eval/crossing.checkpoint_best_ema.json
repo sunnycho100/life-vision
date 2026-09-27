@@ -1,0 +1,13 @@
+{
+  "scenario": "crossing",
+  "detector": "runs/sim_rfdetr/checkpoint_best_ema.pth",
+  "frames_scored": 240,
+  "precision": 0.832,
+  "recall": 1.0,
+  "tp": 960,
+  "fp": 194,
+  "fn": 0,
+  "recall_head_above": 1.0,
+  "recall_head_below": 1.0,
+  "boxes_head_below": 14
+}

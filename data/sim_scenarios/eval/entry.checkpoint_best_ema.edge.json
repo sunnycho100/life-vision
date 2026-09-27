@@ -1,0 +1,35 @@
+{
+  "scenario": "entry",
+  "detector": "runs/sim_rfdetr/checkpoint_best_ema.pth",
+  "frames_scored": 180,
+  "precision": 1.0,
+  "recall": 1.0,
+  "tp": 540,
+  "fp": 0,
+  "fn": 0,
+  "recall_head_above": 1.0,
+  "recall_head_below": 1.0,
+  "boxes_head_below": 19,
+  "tracking": {
+    "0": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 178,
+      "gaps": 0
+    },
+    "1": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 178,
+      "gaps": 0
+    },
+    "2": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 178,
+      "gaps": 0
+    }
+  },
+  "ids_shown": 3,
+  "people_in_scene": 3
+}

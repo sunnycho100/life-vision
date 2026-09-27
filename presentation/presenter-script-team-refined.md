@@ -18,13 +18,13 @@ Transition: “The need becomes clear when we look at how quickly human attentio
 
 Transition: “That is why our design supports attention instead of pretending to replace it.”
 
-## Slide 3 — One observable rule replaced two age-based algorithms
+## Slide 3 — The system times one observable condition
 
 **Rohan · 30 seconds**
 
-“We started with two algorithms: one for a baby who silently sinks and one for an adult showing repetitive distress motion. The team rejected that split for the hackathon. All five of us supported one person class and configurable thresholds. Joanne’s idea of classifying age before someone enters the water remains a later feature because we do not have consented child footage. Sunny, Sam, and I kept active-distress pose as an optional second layer. David required every alert to explain who triggered it, why, and for how long. Our core rule became simple: time how long the head is not above water.”
+“The system tracks each person and watches whether the head is above or below the water. When the head goes below, a per-person timer starts. At the configurable warning threshold, the state becomes yellow. If that condition persists to the alarm threshold, the state becomes red and tells the user to check the pool. If the head comes back above water, the timer resets to green. Entry detection is a separate alert that the user must arm. For this demonstration, the thresholds are intentionally shortened and clearly labeled. This is prolonged head-submersion detection, not a drowning diagnosis.”
 
-Transition: “We could make that decision quickly because the work was divided around shared data contracts.”
+Transition: “That simple rule sits inside a pipeline the five workstreams built in parallel.”
 
 ## Slide 4 — Five workstreams met at one shared data contract
 

@@ -7,7 +7,7 @@ const workspaceDir = process.cwd();
 const CODEX_HOME = process.env.CODEX_HOME ?? path.join(process.env.HOME ?? "", ".codex");
 const SKILL_DIR = process.env.PRESENTATIONS_SKILL_DIR
   ?? path.join(CODEX_HOME, "plugins", "cache", "openai-primary-runtime", "presentations", "26.921.11914", "skills", "presentations");
-const TMP_DIR = path.join(workspaceDir, ".codex-build", "presentation", "team-refined-v2");
+const TMP_DIR = path.join(workspaceDir, ".codex-build", "presentation", "team-refined-v3");
 const FINAL_PPTX = path.join(workspaceDir, "presentation", "slides", "final", "life-vision-team-refined.pptx");
 const RUNTIME_PYTHON = process.env.RUNTIME_PYTHON ?? "python3";
 
@@ -196,41 +196,46 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   );
 }
 
-// Slide 3: scope evolution and decisions
+// Slide 3: observable decision rule
 {
   const s = pres.slides.add();
   s.background.fill = C.bg;
-  topRule(s, "Scope decision", 3);
-  title(s, "One observable rule replaced two age-based algorithms");
+  topRule(s, "Decision rule", 3);
+  title(s, "The system times one observable condition");
 
-  text(s, "ORIGINAL IDEA", 58, 202, 330, 24, { size: 12, bold: true, color: C.muted });
-  const baby = rect(s, 58, 242, 242, 104, C.white, 16, C.line, 1);
-  text(s, "BABY MODEL", 78, 258, 202, 28, { size: 18, bold: true, color: C.text, align: "center" });
-  text(s, "sink and disappear", 78, 292, 202, 30, { size: 16, color: C.muted, align: "center" });
-  const adult = rect(s, 334, 242, 242, 104, C.white, 16, C.line, 1);
-  text(s, "ADULT MODEL", 354, 258, 202, 28, { size: 18, bold: true, color: C.text, align: "center" });
-  text(s, "repetitive distress motion", 354, 292, 202, 30, { size: 16, color: C.muted, align: "center" });
+  const states = [
+    { x: 58, label: "HEAD ABOVE", detail: "Monitoring active", color: C.teal, fill: C.pale },
+    { x: 356, label: "HEAD BELOW", detail: "Per-person timer starts", color: C.blue, fill: C.paleBlue },
+    { x: 654, label: "YELLOW", detail: "Warning threshold", color: C.amber, fill: C.white },
+    { x: 952, label: "RED", detail: "Check the pool", color: C.red, fill: C.white },
+  ];
+  states.forEach(({ x, label, detail, color, fill }, index) => {
+    rect(s, x, 236, 232, 150, fill, 18, color, 2);
+    rect(s, x + 20, 258, 14, 62, color, 7);
+    text(s, String(index + 1).padStart(2, "0"), x + 50, 252, 54, 26, { size: 13, bold: true, color });
+    text(s, label, x + 50, 280, 158, 30, { size: 19, bold: true, color });
+    text(s, detail, x + 20, 332, 192, 34, { size: 16, color: C.text, align: "center" });
+    if (index < states.length - 1) {
+      line(s, x + 232, 311, 66, 0, C.line, 3);
+    }
+  });
 
-  text(s, "ADOPTED BUILD", 694, 202, 330, 24, { size: 12, bold: true, color: C.teal });
-  rect(s, 694, 242, 528, 104, C.pale, 16, C.teal, 2);
-  text(s, "ONE PERSON CLASS", 722, 258, 472, 28, { size: 21, bold: true, color: C.teal, align: "center" });
-  text(s, "time how long the head is not above water", 722, 292, 472, 32, { size: 19, color: C.text, align: "center" });
+  rect(s, 58, 434, 1164, 92, C.white, 16, C.line, 1);
+  text(s, "HEAD RETURNS ABOVE WATER", 82, 452, 330, 24, { size: 12, bold: true, color: C.teal });
+  text(s, "Timer resets to green", 82, 479, 330, 28, { size: 20, bold: true, color: C.text });
+  line(s, 448, 452, 0, 54, C.line, 2);
+  text(s, "ENTRY ALERT", 482, 452, 230, 24, { size: 12, bold: true, color: C.blue });
+  text(s, "Separate rule · user must arm it", 482, 479, 336, 28, { size: 20, bold: true, color: C.text });
+  line(s, 850, 452, 0, 54, C.line, 2);
+  text(s, "USER CONTROL", 884, 452, 250, 24, { size: 12, bold: true, color: C.blue });
+  text(s, "Choose yellow + red, or red only", 884, 479, 314, 36, { size: 18, bold: true, color: C.text });
 
-  line(s, 632, 230, 0, 140, C.line, 2);
-  text(s, "WHY THE TEAM CHANGED COURSE", 58, 408, 430, 24, { size: 12, bold: true, color: C.blue });
-  text(s, "All five", 58, 448, 130, 28, { size: 17, bold: true, color: C.teal });
-  text(s, "One class, configurable thresholds, and safe filming rules", 190, 445, 446, 36, { size: 18, color: C.text });
-  text(s, "Joanne", 58, 502, 130, 28, { size: 17, bold: true, color: C.blue });
-  text(s, "Age classification stays a later feature because child data requires consent", 190, 499, 446, 50, { size: 18, color: C.text });
-  text(s, "Sunny, Sam, Rohan", 674, 448, 206, 28, { size: 17, bold: true, color: C.blue });
-  text(s, "Active-distress pose becomes an optional second layer", 884, 445, 338, 42, { size: 18, color: C.text });
-  text(s, "David", 674, 502, 206, 28, { size: 17, bold: true, color: C.teal });
-  text(s, "Every warning must show who, why, and for how long", 884, 499, 338, 50, { size: 18, color: C.text });
-  text(s, "Decision principle: build one explainable end-to-end system before adding specialized behavior models.", 58, 602, 1164, 42, { size: 20, bold: true, color: C.text, align: "center" });
-  footer(s, "DECISION RECORD · 3 OF 5 SUPPORT REQUIRED");
+  rect(s, 58, 573, 1164, 68, C.pale, 14, C.teal, 1);
+  text(s, "Demo thresholds are shortened, clearly labeled, and never presented as medical cutoffs.", 82, 586, 1116, 42, { size: 19, bold: true, color: C.text, align: "center" });
+  footer(s, "ONE PERSON · ONE TIMER · AN EXPLAINABLE REASON FOR EVERY ALERT");
   note(s,
-    "Rohan, 30 seconds. We began with two algorithms: one for a baby who silently sinks and another for an adult showing repetitive distress motion. The team rejected that split for the hackathon. All five members supported one person class and configurable thresholds. Joanne's age classification idea moves to a later phase because we do not have consented child footage. Sunny, Sam, and Rohan kept active-distress pose as an optional second layer. David required every alert to explain who triggered it, why, and for how long. The core build therefore times one observable condition: the head is not above water.",
-    ["Repository decision record: docs/global/decisions.md", "Original project narrative: docs/presentation.md"]
+    "Rohan, 30 seconds. The system tracks each person and watches whether the head is above or below the water. When the head goes below, a per-person timer starts. At the configurable warning threshold, the state becomes yellow. If that condition persists to the alarm threshold, the state becomes red and tells the user to check the pool. If the head comes back above water, the timer resets to green. Entry detection is a separate alert that the user must arm. For this demonstration, the thresholds are intentionally shortened and clearly labeled. This is prolonged head-submersion detection, not a drowning diagnosis.",
+    ["System architecture: docs/global/architecture.md", "Decision and alert rules: docs/global/decisions.md"]
   );
 }
 

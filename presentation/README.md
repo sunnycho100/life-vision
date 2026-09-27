@@ -1,6 +1,6 @@
 # Presentation assets
 
-Everything that goes into the slides: videos, images, charts, and the numbers behind them. The talk itself is in [docs/presentation.md](../docs/presentation.md).
+Everything that goes into the slides: videos, images, charts, and the numbers behind them. Start with the [final deck](slides/final/life-vision-hackathon-deck.pptx) and [final presenter script](presenter-script-final.md). The earlier narrative remains in [docs/presentation.md](../docs/presentation.md) as supporting material.
 
 | Folder | What goes here |
 |---|---|
@@ -29,6 +29,19 @@ Name files by what they show, e.g. `before_stock_rfdetr_default_tracker.mp4`, no
 | `slides/slide-context.md` | Per-slide content, visuals, speaker notes, timing, presenter split | written from the technical story |
 | `videos/demo_hq_tracking_finetuned_rfdetr.mp4` | Fine-tuned RF-DETR-N + tracking on the HQ demo render (slide 8 fallback) | `sim/eval_detectors.py --scenario demo_hq --detector <sim_rfdetr checkpoint> --track --edge --video --no-gt` |
 | `data/sim_results.csv` | Detector and tracker results on the held-out sim scenario | [docs/global/simulation.md](../docs/global/simulation.md) |
+| `slides/final/life-vision-hackathon-deck.pptx` | Final 10-slide hackathon deck using the frontend palette and interaction language; includes editable chart data and speaker notes | generated with `slides/build_final_deck.mjs` from repository results and sources |
+| `presenter-script-final.md` | Timed 5:30 talk track, live-demo checklist, transitions, and likely judge Q&A | written from the final deck and measured repository results |
+| `images/generated/cover-pool-camera.png` | Cinematic pool-camera cover visual | generated with OpenAI ImageGen for this presentation |
+| `images/generated/safe-pool-demo.png` | Safe two-person pool scene used to explain the live demo | generated with OpenAI ImageGen for this presentation |
+| `images/generated/camera-pool-integration.png` | Unbranded pool-camera integration concept | generated with OpenAI ImageGen for this presentation |
+
+## Presenting the final deck
+
+1. Rehearse from `presenter-script-final.md`; the target runtime is 5 minutes 30 seconds.
+2. Before presenting, open the local frontend and load the team's prerecorded pool clip.
+3. On slide 9, switch to the frontend, activate monitoring, and narrate green → yellow → red as the timer advances.
+4. State whether the run is live inference, prerecorded inference, or scripted output. Do not imply a scripted run is a live model result.
+5. If the live demo fails, return to the deck and use the recorded simulation assets in `videos/`.
 
 ## Rules for slides
 - Sim numbers are sim only. Label them "on simulation" and never present them as real-world accuracy.

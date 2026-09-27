@@ -23,6 +23,9 @@ DEFAULTS = {
     "lost_buffer_s": 5.0,   # ByteTrack keeps a lost track this long
     "stitch_s": 5.0,        # a new track can continue a person lost within this many seconds
     "stitch_scale": 1.5,    # ... if it appears within this many box sizes of where they were lost
+    "resurface_speed": 0.5, # after stitch_s, a held person can still be reclaimed: the search radius grows by
+                            # this many box sizes per second lost (swimmers drift), capped at resurface_max
+    "resurface_max": 4.0,
     "hold_s": 1.0,          # draw a lost person's last box this long as "missing" before any warning
     "warn_s": 5.0,          # missing this long: warning (yellow)
     "alarm_s": 12.0,        # missing this long: alarm (red)
@@ -107,12 +110,17 @@ class PoolTracker:
         best, best_d = None, None
         for pid, p in self.people.items():
             lost = t - p["last_seen"]
-            if pid in visible or lost <= 0 or lost > self.cfg["stitch_s"]:
+            if pid in visible or lost <= 0 or lost > self.cfg["forget_s"]:
                 continue
             lb = p["box"]
             size = max(lb[2] - lb[0], lb[3] - lb[1])
             d = np.hypot(cx - (lb[0] + lb[2]) / 2, cy - (lb[1] + lb[3]) / 2)
-            if d <= self.cfg["stitch_scale"] * size and (best_d is None or d < best_d):
+            # Short gaps use the tight gate. Longer gaps (while the missing box is still shown) widen with time,
+            # so a swimmer who resurfaces a little further away clears their own warning instead of leaving it
+            # red until forget_s. Only brand-new tracks get here, so an already-tracked passer-by can't take it.
+            reach = self.cfg["stitch_scale"] if lost <= self.cfg["stitch_s"] else min(
+                self.cfg["stitch_scale"] + self.cfg["resurface_speed"] * (lost - self.cfg["stitch_s"]), self.cfg["resurface_max"])
+            if d <= reach * size and (best_d is None or d < best_d):
                 best, best_d = pid, d
         return best
 
@@ -191,4 +199,18 @@ if __name__ == "__main__":  # smoke check: one person lost 2 s and back nearby k
         people = tr.update(t, [] if 5 <= fr % 20 < 9 else [{"bbox_xyxy_normalized": [x, 0.4, x + 0.06, 0.55], "confidence": 0.9}])
         seen = [p["person_id"] for p in people]
         assert len(seen) == len(set(seen)), f"duplicate person IDs at t={t}: {seen}"
+    tr = PoolTracker(5)  # resurfacing after 8 s, 2.5 box sizes away, reclaims the same person
+    far = [0.70, 0.40, 0.76, 0.55]
+    got = set()
+    for f in range(100):
+        t = f / 5
+        if t < 4:
+            people = tr.update(t, [{"bbox_xyxy_normalized": far, "confidence": 0.9}])
+        elif t < 12:
+            people = tr.update(t, [])
+        else:
+            moved = [far[0] + 0.15, far[1], far[2] + 0.15, far[3]]
+            people = tr.update(t, [{"bbox_xyxy_normalized": moved, "confidence": 0.9}])
+            got |= {p["person_id"] for p in people}
+    assert got == {1} and all(p["visible"] for p in people), f"resurfaced person should keep ID 1, got {sorted(got)}"
     print("tracking smoke check ok")

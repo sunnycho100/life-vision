@@ -25,10 +25,13 @@ Run from the repo root (see sim/isaac/README.md):
     sim\\isaac\\.venv\\Scripts\\python.exe sim\\isaac\\pool_video.py --seconds 20 --fps 30 --pathtrace 64 --subframes 1
 Output in --out:
     pool.mp4             the clean video (what the model sees)
-    pool_labeled.mp4     same video with true boxes, head state and underwater timers drawn in
+    pool_labeled.mp4     same video with the true boxes, colored GREEN / ORANGE / RED by the
+                         rules in model/alert_rules.py (lifeguard 10/20 rule, ASTM F3698, drowning
+                         physiology, instinctive drowning response signs)
     gt.txt               MOT format: frame,id,x,y,w,h,1,class,-1,-1 (full-body box, 1-based frame)
-    labels.jsonl         one line per frame: every person's scenario, head height, state,
-                         seconds underwater, full-body box and above-water box
+    labels.jsonl         one line per frame: every person's scenario, head height and the local water
+                         level, head state, status (green/orange/red) and reason, seconds underwater,
+                         full-body box and above-water box
     yolo/images, yolo/labels   with --yolo-every K: every K-th frame for detector training.
                          Classes: 0 = swimming (head above or partly above), 1 = underwater
 """
@@ -68,6 +71,8 @@ import numpy as np  # noqa: E402
 import omni.replicator.core as rep  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "model"))
+import alert_rules  # noqa: E402  (shared GREEN / ORANGE / RED rules)
 import pool_anim as anim  # noqa: E402
 from pool_scene import POOL_D, POOL_L, POOL_W, PoolScene  # noqa: E402
 
@@ -281,9 +286,18 @@ gt = open(os.path.join(args.out, "gt.txt"), "w")
 jl = open(os.path.join(args.out, "labels.jsonl"), "w")
 
 FS, LW = 0.5 * args.width / 1280, max(1, args.width // 1280)  # text size and line width scale with resolution
-COLORS = {"above": (0, 200, 0), "partial": (0, 170, 255), "below": (0, 0, 230)}  # BGR
+STATE_COLORS = {"above": (0, 200, 0), "partial": (0, 165, 255), "below": (0, 0, 255)}  # stills mode only
+rules = alert_rules.StatusTracker(grace_s=0.0, dims=3)  # exact sim inputs: no flicker to smooth over
 roots = [str(p.GetPath()) for p in scene.people]
-under_since = {}
+
+
+def put_label(img, text, org, color, scale=None):
+    """Text on a dark backing so it stays readable over bright water and deck."""
+    scale = FS if scale is None else scale
+    (tw, th), base = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, LW)
+    x, y = max(0, org[0]), max(th + 4, org[1])
+    cv2.rectangle(img, (x - 2, y - th - 4), (x + tw + 2, y + base), (25, 25, 25), -1)
+    cv2.putText(img, text, (x, y - 2), cv2.FONT_HERSHEY_SIMPLEX, scale, color, LW)
 
 
 def owner(prim_path):
@@ -304,25 +318,42 @@ def tight_boxes(data):
 
 
 def refract(pts, cam, n=1.333):
-    """Where the camera sees underwater points: replace each point below the surface (z < 0)
-    with the spot on the surface where its light ray exits toward the camera (Snell's law,
-    solved by bisection, against the mean surface z = 0). Submerged limbs look shallower."""
+    """Where the camera sees each underwater point. Light from a point under the water leaves
+    through the rippled surface and bends (Snell's law about the local surface normal), so the
+    camera sees the point at the spot where its ray exits the water. Solved per point: first
+    against a flat surface at z = 0 (bisection), then corrected against the actual wave height
+    and normal for this frame (a few fixed-point iterations; each moves the exit point by the
+    miss at the point's depth)."""
     pts = pts.copy()
-    under = pts[:, 2] < 0
+    surf, _, _ = scene.water.sample(pts[:, 0], pts[:, 1])
+    under = pts[:, 2] < surf
     if not under.any() or cam[2] <= 0:
         return pts
     p = pts[under]
     horiz = p[:, :2] - cam[:2]
     dist = np.linalg.norm(horiz, axis=1) + 1e-9
-    h, d = cam[2], -p[:, 2]
+    h, d = cam[2], np.maximum(-p[:, 2], 1e-4)
     lo, hi = np.zeros_like(dist), dist.copy()
-    for _ in range(40):  # r = horizontal distance from the camera to the exit point
+    for _ in range(40):  # r = horizontal distance from the camera to the exit point, flat surface
         r = (lo + hi) / 2
         f = r / np.hypot(r, h) - n * (dist - r) / np.hypot(dist - r, d)
         lo, hi = np.where(f < 0, r, lo), np.where(f < 0, hi, r)
-    r = (lo + hi) / 2
-    exit_xy = cam[:2] + horiz * (r / dist)[:, None]
-    pts[under] = np.column_stack([exit_xy, np.zeros(len(p))])
+    s_xy = cam[:2] + horiz * (((lo + hi) / 2) / dist)[:, None]
+    eta = 1.0 / n
+    for _ in range(6):  # now the real surface: local height and normal
+        sz, gx, gy = scene.water.sample(s_xy[:, 0], s_xy[:, 1])
+        normal = np.column_stack([-gx, -gy, np.ones(len(sz))])
+        normal /= np.linalg.norm(normal, axis=1, keepdims=True)
+        d_in = np.column_stack([s_xy, sz]) - cam
+        d_in /= np.linalg.norm(d_in, axis=1, keepdims=True)
+        cos_i = -(d_in * normal).sum(1)
+        k = np.maximum(1 - eta ** 2 * (1 - cos_i ** 2), 0)
+        d_t = eta * d_in + (eta * cos_i - np.sqrt(k))[:, None] * normal  # refracted direction
+        steps = (p[:, 2] - sz) / np.minimum(d_t[:, 2], -1e-6)
+        land = s_xy + d_t[:, :2] * steps[:, None]  # where this ray reaches the point's depth
+        s_xy = s_xy + (p[:, :2] - land)
+    sz, _, _ = scene.water.sample(s_xy[:, 0], s_xy[:, 1])
+    pts[under] = np.column_stack([s_xy, sz])
     return pts
 
 
@@ -370,12 +401,25 @@ for f in range(n_frames):
             if i not in cast:
                 scene.park(i)
         scene.set_water(t + 7 * args.seed, sources)
+    # Head state against the local (wavy) surface, and the GREEN / ORANGE / RED status from the
+    # shared rules, measured exactly from the sim: head vs water, posture, headway, movement.
     for i, info in people.items():
-        if info["head_state"] == "below":
-            under_since.setdefault(i, t)
-        else:
-            under_since.pop(i, None)
-        info["seconds_below"] = round(t - under_since[i], 2) if i in under_since else 0.0
+        c, r = scene.head_world(i)
+        surf = float(scene.water.sample(c[0], c[1])[0][0])
+        above = c[2] - surf
+        head_under = above + r <= 0
+        info["head_z"], info["surface_z"] = round(c[2], 3), round(surf, 3)
+        info["head_state"] = "below" if head_under else ("above" if above - r >= 0 else "partial")
+        if args.random:  # stills: no time series, so no status
+            continue
+        tilt = scene.body_tilt(i)
+        hip = scene.joint_world(i, "Hip")
+        st = rules.update(i, t, head_under=head_under,
+                          mouth_low=(not head_under) and above < alert_rules.MOUTH_LOW_FRAC * r,
+                          upright=tilt < alert_rules.UPRIGHT_DEG, pos=(hip[0], hip[1]),
+                          points=scene.key_points(i), size=scene.heights[i] * scene.scale_of[i])
+        info.update(status=st["status"], status_reason=st["reason"], seconds_below=st["seconds_under"],
+                    seconds_distress=st["seconds_distress"], tilt_deg=round(tilt, 1))
 
     for _ in range(2):
         simulation_app.update()
@@ -400,14 +444,22 @@ for f in range(n_frames):
         if save_yolo:
             yolo_lines.append(f"{cls} {(x0 + x1) / 2 / args.width:.6f} {(y0 + y1) / 2 / args.height:.6f} "
                               f"{(x1 - x0) / args.width:.6f} {(y1 - y0) / args.height:.6f}")
-        c = COLORS[info["head_state"]]
-        cv2.rectangle(vis, body[:2], body[2:], c, 2 * LW)
-        label = f'#{i + 1} {info["scenario"]} {info["head_state"]}'
-        if info["seconds_below"] > 0:
-            label += f' {info["seconds_below"]:.1f}s under'
-        cv2.putText(vis, label, (x0, max(int(28 * FS), y0 - 6)), cv2.FONT_HERSHEY_SIMPLEX, FS, (0, 0, 0), 3 * LW)
-        cv2.putText(vis, label, (x0, max(int(28 * FS), y0 - 6)), cv2.FONT_HERSHEY_SIMPLEX, FS, c, LW)
+        if "status" in info:
+            c = alert_rules.COLORS_BGR[info["status"]]
+            label = f'#{i + 1} {info["scenario"]}: {info["status"].upper()}'
+            if info["status_reason"] != "ok":
+                label += f' - {info["status_reason"]}'
+        else:
+            c = STATE_COLORS[info["head_state"]]
+            label = f'#{i + 1} {info["scenario"]} head {info["head_state"]}'
+        cv2.rectangle(vis, body[:2], body[2:], c, (3 if info.get("status", "green") != "green" else 2) * LW)
+        put_label(vis, label, (x0, y0 - 6), c)
     cv2.putText(vis, f"t = {t:5.1f}s  (ground truth)", (10, int(48 * FS)), cv2.FONT_HERSHEY_SIMPLEX, 1.4 * FS, (255, 255, 255), 2 * LW)
+    if not args.random:
+        for k, (txt, col) in enumerate([("GREEN  ok", "green"),
+                                        ("ORANGE watch: 5 s under, or drowning signs 3 s", "orange"),
+                                        ("RED alarm: 10 s under, or 5 s under and not moving", "red")]):
+            put_label(vis, txt, (10, int((84 + 30 * k) * FS)), alert_rules.COLORS_BGR[col], 0.9 * FS)
     labeled.send(np.ascontiguousarray(vis[:, :, ::-1]).tobytes())
     if save_yolo:
         stem = f"s{args.seed}{'r' if args.random else ''}_{f:05d}"

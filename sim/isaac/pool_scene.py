@@ -129,6 +129,7 @@ class WaterSurface:
         pts = np.column_stack([self.X.ravel(), self.Y.ravel(), z.ravel()]).astype(np.float32)
         self.mesh.GetPointsAttr().Set(Vt.Vec3fArray.FromNumpy(np.vstack([pts, self.static])))
         gy, gx = np.gradient(z, self.dy, self.dx)
+        self.z, self.gx, self.gy = z, gx, gy
         n = np.column_stack([-gx.ravel(), -gy.ravel(), np.ones(z.size)])
         n /= np.linalg.norm(n, axis=1, keepdims=True)
         normals = np.vstack([n[self.top_fv], self.static_normals]).astype(np.float32)
@@ -136,6 +137,21 @@ class WaterSurface:
         uv = np.column_stack([self.X.ravel() / self.tile + scroll[0] * t, self.Y.ravel() / self.tile + scroll[1] * t])
         st = np.vstack([uv[self.top_fv], self.static_st]).astype(np.float32)
         self.st.Set(Vt.Vec2fArray.FromNumpy(st))
+
+    def sample(self, x, y):
+        """Surface height z and slopes dz/dx, dz/dy at points (x, y) for the current frame,
+        by bilinear interpolation of the grid. The local normal is (-dz/dx, -dz/dy, 1)."""
+        x, y = np.atleast_1d(np.asarray(x, float)), np.atleast_1d(np.asarray(y, float))
+        ny, nx = self.z.shape
+        fx = np.clip((x - self.X[0, 0]) / self.dx, 0, nx - 1.001)
+        fy = np.clip((y - self.Y[0, 0]) / self.dy, 0, ny - 1.001)
+        i, j = fx.astype(int), fy.astype(int)
+        ax, ay = fx - i, fy - j
+
+        def bilinear(a):
+            return (a[j, i] * (1 - ax) * (1 - ay) + a[j, i + 1] * ax * (1 - ay)
+                    + a[j + 1, i] * (1 - ax) * ay + a[j + 1, i + 1] * ax * ay)
+        return bilinear(self.z), bilinear(self.gx), bilinear(self.gy)
 
 
 class PoolScene:
@@ -250,6 +266,7 @@ class PoolScene:
             cache.Clear()
             self.heights.append(cache.ComputeWorldBound(p).ComputeAlignedRange().GetMax()[2])
         self.last = [None] * len(self.people)
+        self.scale_of = [1.0] * len(self.people)
         for i in range(len(self.people)):
             self.park(i)
 
@@ -310,6 +327,7 @@ class PoolScene:
         m = m * Gf.Matrix4d().SetTranslate(Gf.Vec3d(x, y, head_z - c[2]))
         self.ops[i].Set(m)
         self.last[i] = (model, self.skel_xf[i] * m, m)
+        self.scale_of[i] = scale
         return {"head_z": round(head_z, 3), "head_state": head_state(head_z, HEAD_R * scale)}
 
     def body_points(self, i):
@@ -321,6 +339,26 @@ class PoolScene:
         center, axis = m.Transform(center), m.TransformDir(axis)
         pts += [center + axis * 0.12, center + Gf.Vec3d(0, 0, 0.1)]  # crown, and the top of the head
         return pts
+
+    def head_world(self, i):
+        """Head center (world) of person i in the current pose, and the head radius."""
+        model, _, m = self.last[i]
+        center, _ = self.head_center(i, model)
+        return m.Transform(center), HEAD_R * self.scale_of[i]
+
+    def joint_world(self, i, name):
+        model, to_world, _ = self.last[i]
+        return to_world.Transform(self.rigs[i].pos(model, name))
+
+    def body_tilt(self, i):
+        """Angle of the body's long axis (hip to neck) from vertical, degrees: 0 = upright."""
+        v = self.joint_world(i, "NeckTwist01") - self.joint_world(i, "Hip")
+        return math.degrees(math.acos(max(-1.0, min(1.0, v[2] / max(v.GetLength(), 1e-9)))))
+
+    def key_points(self, i):
+        """Hip, head, hands and feet (world, meters) as one flat list, for measuring movement."""
+        pts = [self.joint_world(i, n) for n in ("Hip", "Head", "L_Hand", "R_Hand", "L_Foot", "R_Foot")]
+        return [c for p in pts for c in (p[0], p[1], p[2])]
 
     def park(self, i):
         """Move an unused person far away. Toggling visibility instead makes the box

@@ -153,6 +153,12 @@ def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, bac
             raise HTTPException(404, "Source file no longer exists")
         return FileResponse(path, media_type=mimetypes.guess_type(path)[0] or "video/mp4")
 
+    @app.get("/api/sources/{source_id}/jobs")
+    def source_jobs(source_id: str):
+        get_source(source_id)
+        jobs = (read_json(path) for path in (data / "jobs").glob("*/status.json"))
+        return sorted((j for j in jobs if j.get("source_id") == source_id), key=lambda j: j["created"], reverse=True)
+
     @app.post("/api/jobs", status_code=202)
     def create_job(body: JobRequest):
         try:

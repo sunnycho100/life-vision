@@ -4,8 +4,8 @@ const $ = id => document.getElementById(id);
 const video = $('video'), stage = $('stage'), overlay = $('overlay'), context = overlay.getContext('2d');
 const panels = ['source', 'calibrate', 'scan', 'twin'];
 let phase = 'source', corners = [[.085, .08], [.95, .14], [.96, .91], [.22, .91]];
-let source = null, reference, config = null, job = null, twin = null, importedFrames = null;
-let sourceGeneration = 0, frameTime = 0, currentDetections = [], threshold = .5, refreshPending = false, pollBusy = false;
+let source = null, reference, config = null, job = null, lastJob = null, twin = null, importedFrames = null;
+let sourceGeneration = 0, frameTime = 0, currentDetections = [], threshold = .2, refreshPending = false, pollBusy = false;
 const handles = [];
 const cache = new ObservationCache(async (start, end) => {
   const response = await api('/api/jobs/' + job.id + '/observations?start=' + start + '&end=' + end);
@@ -94,7 +94,7 @@ function once(target, event, timeout = 20000) {
 async function connect(info, isReference = false) {
   const generation = ++sourceGeneration;
   video.pause(); clearDisplay(); cache.clear(); importedFrames = null; job = null; config = null; source = null;
-  $('resume-inference').hidden = true; $('zoom-warning').hidden = true;
+  $('resume-inference').hidden = true; $('zoom-warning').hidden = true; $('last-analysis').hidden = true; lastJob = null;
   const ready = once(video, 'loadeddata'); video.src = info.url; video.load(); await ready;
   if (generation !== sourceGeneration) return;
   if (!Number.isFinite(video.duration) || Math.abs(video.duration - info.duration) > .15 || video.videoWidth !== info.width || video.videoHeight !== info.height) throw Error('Browser and decoder disagree on video geometry or duration. Re-export as an upright H.264 MP4.');
@@ -109,6 +109,11 @@ async function connect(info, isReference = false) {
   if (Math.abs(video.currentTime - target) > .001) {const seeked = once(video, 'seeked'); video.currentTime = target; await seeked;}
   frameTime = video.currentTime;
   setPhase('calibrate'); $('scan-button').textContent = 'Analyze recording'; $('tracking-status').textContent = 'Define the pool region, then analyze the recording.';
+  const past = await api('/api/sources/' + info.id + '/jobs').catch(() => []);
+  if (generation !== sourceGeneration) return;
+  lastJob = past.find(j => j.state === 'completed') ?? null;
+  $('last-analysis').hidden = !lastJob;
+  if (lastJob) $('last-analysis').textContent = 'Review last analysis · ' + timeLabel(Math.round(lastJob.start)) + '–' + timeLabel(Math.round(lastJob.end));
 }
 $('reference-button').onclick = () => connect(reference, true).catch(e => message(e.message));
 $('video-file').onchange = async e => {
@@ -193,6 +198,10 @@ async function openReview() {
   }
   await refresh();
 }
+$('last-analysis').onclick = async () => {
+  try {config = readConfig(); twin?.configure(config); video.pause(); job = lastJob; cache.clear(); await openReview();}
+  catch (error) {message(error.message);}
+};
 $('review-progress').onclick = () => openReview().catch(e => message(e.message));
 async function refresh() {
   if (!source || !job || importedFrames || refreshPending) return;

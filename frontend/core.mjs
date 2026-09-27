@@ -102,3 +102,38 @@ export function inside(p, quad) {
   });
 }
 
+
+// Best-fit camera over the mapped water, in the 3D view's axes (x right, y up, water at y = 0).
+// ponytail: pattern search over position, height and lens (about 48 to 104 degree field of view), aimed at the image center with no roll.
+// Mapped corners often outline visible water rather than a true rectangle, so an exact solve can fail; this always returns the closest fit.
+export function cameraPose(corners, width, length, aspect) {
+  const world = [[-width / 2, -length / 2], [width / 2, -length / 2], [width / 2, length / 2], [-width / 2, length / 2]];
+  const map = homography(corners, world), aim = project(map, .5, .5), near = project(map, .5, .95);
+  const image = corners.map(([x, y]) => [(x - .5) * aspect, y - .5]);
+  const norm = v => {const n = Math.hypot(...v); return v.map(x => x / n);};
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const error = ([x, z, height, f]) => {
+    if (height < .3 || f < .7 || f > 2) return Infinity;
+    const eye = [x, height, z], forward = norm([aim[0] - x, -height, aim[1] - z]);
+    const right = norm(cross(forward, [0, 1, 0])), down = cross(forward, right);
+    return world.reduce((sum, [wx, wz], i) => {
+      const p = [wx - eye[0], -eye[1], wz - eye[2]], depth = dot(p, forward);
+      if (depth <= 0) return Infinity;
+      return sum + (f * dot(p, right) / depth - image[i][0]) ** 2 + (f * dot(p, down) / depth - image[i][1]) ** 2;
+    }, 0);
+  };
+  const size = Math.max(width, length), back = norm([near[0] - aim[0], near[1] - aim[1]]);
+  let best = [near[0] + back[0] * size * .5, near[1] + back[1] * size * .5, size * .4, 1.27], score = error(best);
+  const steps = [size / 4, size / 4, size / 4, .25];
+  for (let round = 0; round < 60 && steps[0] > 1e-4; round++) {
+    let improved = false;
+    for (let k = 0; k < 4; k++) for (const sign of [1, -1]) {
+      const trial = best.slice(); trial[k] += sign * steps[k];
+      const e = error(trial);
+      if (e < score) {best = trial; score = e; improved = true;}
+    }
+    if (!improved) steps.forEach((_, k) => steps[k] /= 2); else round--;
+  }
+  return {x: best[0], z: best[1], height: best[2], focal: best[3], aim, fitError: Math.sqrt(score / 4)};
+}

@@ -1,0 +1,30 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>First rescue annotation: guided example</title>
+<style>body{max-width:900px;margin:32px auto;padding:0 20px;background:#10201f;color:#e3eee8;font:17px/1.65 system-ui}a{color:#8ee1bf}h1,h2{line-height:1.25}code{background:#263e35;padding:2px 5px;overflow-wrap:anywhere}li{margin:10px 0}.note{padding:16px;border-left:4px solid #edc16c;background:#23332b}table{border-collapse:collapse;width:100%}td,th{padding:10px;text-align:left;border-bottom:1px solid #38564a}button{padding:12px;font:inherit;background:#84d8b4;border:0;border-radius:7px;cursor:pointer;color:#12261d}strong{color:#fff}</style>
+<h1>Let’s review one clip together</h1>
+<p>Start with <code>a2FD2QfT0d8.mp4</code>, a 33.73-second training clip. The goal of this first exercise is to identify the rescued swimmer and record what is actually visible. You can leave any interval <strong>uncertain</strong>.</p>
+<p class="note">These are assistant observations to check, not approved labels. The clip title is not ground truth. A lifeguard reaching somebody does not prove that every earlier movement was drowning.</p>
+<h2>1. Open your review workspace</h2>
+<ol><li><a href="/rescue-review.html" target="_blank">Open the local video review page</a>.</li>
+<li>For “Dataset manifest,” choose <code>data/processed/lifeguard-review-v1/rescue-manifest.json</code> in this repository.</li>
+<li>For “Source videos,” choose <code>data/raw/lifeguard_rescue/under_60s</code>.</li>
+<li>Select the source whose filename is <code>a2FD2QfT0d8.mp4</code>. Play the whole video once, then choose 0.25× or 0.5× speed.</li></ol>
+<h2>2. Identify the person, starting from the rescue</h2>
+<table><tr><th>Where to look</th><th>What to check</th></tr>
+<tr><td>Around 10 seconds</td><td>A lifeguard with a yellow rescue tube has reached a swimmer near the center. Locate the swimmer being assisted, separate from the lifeguard and the nearby person wearing a white shirt.</td></tr>
+<tr><td>Around 8 seconds</td><td>Work backward. The candidate swimmer is between the approaching lifeguard and the person in white, with arms near the surface. Confirm that it is the same person; the camera zooms.</td></tr>
+<tr><td>Around 4–6 seconds</td><td>The candidate is near the center, ahead of the lifeguard and below the people in blue tubes. Check head, arms and body together at slow speed. Arms at the surface alone do not establish distress.</td></tr>
+<tr><td>First 0–2 seconds</td><td>The lifeguard enters the water very early. Determine the approximate entry time, but do not invent a distress onset before the clip begins.</td></tr></table>
+<h2>3. Save one target identity box</h2>
+<ol><li>Pause at about 6 seconds. If you can confidently identify the swimmer, enter <code>person-1</code> in “Target ID.”</li><li>Choose “Draw box at current time” and drag a tight box around that person’s <em>visible</em> extent. Do not extend the box to where hidden legs might be.</li><li>Add another keyframe around 8 seconds using the same ID only if you can follow the identity. If you cannot, leave it unannotated and explain why in notes.</li></ol>
+<h2>4. Mark the first interval conservatively</h2>
+<p>For this practice run, inspect 4–8 seconds. If you cannot confidently distinguish distress from ordinary movement, record:</p>
+<ul><li>Start: <code>4</code>; end: <code>8</code>; label: <code>uncertain</code>; target: <code>person-1</code>.</li><li>Notes: your actual observation, for example “Arms visible at surface; rescue already underway; cannot establish onset.”</li></ul>
+<p>If you believe distress is clearly visible, use <code>visible_distress</code> and describe the sustained behavior you see. This is a candidate for a second review, not a medical diagnosis. Record later assistance as <code>rescue</code>, separately. Intervals for the same person must not overlap.</p>
+<p class="note">The first full clip review also needs the lifeguard’s entry and contact times, camera zoom/cuts, and an onset uncertainty range in reviewer notes. Positive action-training windows should end before the rescue response becomes a shortcut. This particular clip may be excluded from pre-rescue action training while still helping person detection.</p>
+<h2>5. Send back your first review</h2>
+<ol><li>Enter your name, add your observations, and mark the source reviewed only when you have checked the full clip. Unlabeled parts remain unknown.</li><li>Click “Download reviewed manifest.” Save it as <code>rescue-manifest-reviewed.json</code> inside <code>data/processed/lifeguard-review-v1</code>.</li><li>Tell me the file is saved. I’ll validate it and help resolve the uncertain intervals before we expand the batch.</li></ol>
+<h2>Person detection is a separate pass</h2>
+<p>Use <a href="/annotate.html" target="_blank">the person-box review page</a> and select the prepared folder. Some training frames contain editable model suggestions. Correct false boxes, add every missed visible person, and name yourself before marking a frame reviewed. A target-only box from this video exercise is <strong>not</strong> a complete person-detection training frame.</p>
+<p>Validation and test frames have no model suggestions. A frame with an inseparable crowd region is excluded from the current training export so ignored people are not accidentally taught as background.</p>
+</html>

@@ -104,11 +104,44 @@ export function project(h, x, y) {
   return [(h[0] * x + h[1] * y + h[2]) / d, (h[3] * x + h[4] * y + h[5]) / d];
 }
 
-export function inside(p, quad) {
-  return quad.every((a, i) => {
-    const b = quad[(i + 1) % 4];
-    return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) >= 0;
+// Any outline of 4+ corners, concave allowed, as long as no two edges cross.
+export function validPolygon(q) {
+  const n = q.length;
+  if (n < 4 || q.some(p => p.length !== 2 || p.some(v => !Number.isFinite(v) || v < 0 || v > 1))) return false;
+  const area = Math.abs(q.reduce((s, a, i) => s + a[0] * q[(i + 1) % n][1] - a[1] * q[(i + 1) % n][0], 0)) / 2;
+  const side = (a, b, c) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+  for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) {
+    if (i === 0 && j === n - 1) continue; // edges sharing the closing corner
+    const [a, b, c, d] = [q[i], q[(i + 1) % n], q[j], q[(j + 1) % n]];
+    if (side(a, b, c) !== side(a, b, d) && side(c, d, a) !== side(c, d, b)) return false;
+  }
+  return area > .025;
+}
+
+// Even-odd ray cast, so it works for concave outlines too.
+export function inside(p, polygon) {
+  let hit = false;
+  polygon.forEach((a, i) => {
+    const b = polygon[(i + 1) % polygon.length];
+    if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < a[0] + (p[1] - a[1]) * (b[0] - a[0]) / (b[1] - a[1])) hit = !hit;
   });
+  return hit;
+}
+
+export function surfacePosition(detection, config) {
+  const {bbox_xyxy_normalized: box} = detection ?? {};
+  const {corners, width, length, water, measured} = config ?? {};
+  if (!Array.isArray(box) || box.length !== 4 || !box.every(Number.isFinite) || box.some(v => v < 0 || v > 1) || box[2] <= box[0] || box[3] <= box[1]) return null;
+  if (!Array.isArray(corners) || corners.length !== 4 || corners.some(p => !Array.isArray(p) || p.length !== 2 || !p.every(Number.isFinite)) ||
+      !validQuad(corners) || ![width, length, water].every(Number.isFinite) || width <= 0 || length <= 0 || water < 0) return null;
+  const anchor = boxAnchor(box);
+  if (!inside(anchor, corners)) return null;
+  try {
+    const h = homography(corners, [[0, 0], [width, 0], [width, length], [0, length]]);
+    const [x, y] = project(h, ...anchor) ?? [];
+    if (![x, y].every(Number.isFinite)) return null;
+    return {x, y: water, z: y, method: 'water-plane-homography', height_assumed: true, units: 'm', calibration: measured ? 'user-measured' : 'approximate'};
+  } catch { return null; }
 }
 
 

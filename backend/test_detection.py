@@ -5,8 +5,8 @@ import time
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-from backend.common import digest, probe, sampled_frames, read_json, write_json
-from backend.detector import preprocess, decode
+from backend.common import ROOT, digest, probe, sampled_frames, read_json, write_json
+from backend.detector import preprocess, decode, load_manifest, create_detector
 from backend.jobs import JobManager, observation_db
 from backend.serve import create_app
 
@@ -39,6 +39,24 @@ def test_preprocess_normalization_channel_order_and_half_pixel():
     expected = (np.full(3, .5) - [.485, .456, .406]) / [.229, .224, .225]
     np.testing.assert_allclose(result[0, :, 0, 0], expected, atol=1e-6)
     assert result.dtype == np.float32 and result.shape == (1, 3, 1, 1)
+
+
+def test_status_replace_retries_windows_reader_lock(tmp_path, monkeypatch):
+    import os
+    path = tmp_path / "status.json"
+    write_json(path, {"state": "starting"})
+    replace = os.replace
+    calls = []
+    def temporarily_locked(source, destination):
+        calls.append(1)
+        if len(calls) < 3:
+            assert read_json(path)["state"] == "starting"
+            raise PermissionError("reader still holds file")
+        replace(source, destination)
+    monkeypatch.setattr("backend.common.os.replace", temporarily_locked)
+    write_json(path, {"state": "completed"})
+    assert read_json(path)["state"] == "completed" and len(calls) == 3
+    assert not list(tmp_path.glob("*.tmp"))
 
 
 def test_decoder_keeps_150_people_without_nms_or_yolo_class_zero():
@@ -132,3 +150,28 @@ def test_observation_window_empty_is_not_missing_and_more_than_100(tmp_path):
     assert [len(row["detections"]) for row in rows] == [150, 0]
     assert manager.observations("a" * 32, 2, 3) == []
     with pytest.raises(ValueError): manager.observations("a" * 32, 0, 60)
+
+
+def test_manifest_accepts_fine_tuned_small_and_rejects_unknown_models(tmp_path):
+    path = tmp_path / "model.json"
+    small = {"model": "RFDETRSmall", "rfdetr_version": "1.11.0", "resolution": 512, "precision": "fp32",
+             "person_id": 0, "num_classes": 1, "background_id": None, "num_select": 300}
+    write_json(path, small)
+    assert load_manifest(path)["person_id"] == 0
+    for bad in [{"model": "RFDETRLarge"}, {"resolution": 384}, {"person_id": -1}]:
+        write_json(path, {**small, **bad})
+        with pytest.raises(ValueError):
+            load_manifest(path)
+
+
+FINE_TUNED = ROOT / "artifacts/models/rfdetr-s-person-v1/manifest.json"
+
+
+@pytest.mark.skipif(not FINE_TUNED.is_file(), reason="Joanne's fine-tuned weights are not on this machine")
+def test_fine_tuned_small_detects_people_on_gpu():
+    import torch
+    provider = "mps" if torch.backends.mps.is_available() else "cpu"
+    rgb = np.full((360, 640, 3), 90, np.uint8)
+    detector = create_detector(FINE_TUNED, "python", provider)
+    assert detector.runtime["provider"] == provider
+    assert all(d["class_name"] == "person" for d in detector.predict(rgb))

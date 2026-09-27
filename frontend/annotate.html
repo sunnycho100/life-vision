@@ -2,7 +2,9 @@
 <html lang="en"><meta charset="utf-8"><title>Poolside annotation review</title>
 <style>body{font:15px system-ui;background:#101e23;color:#d6eee4;margin:24px}button,input,select{font:inherit;margin:4px;padding:6px}button{cursor:pointer}header{position:sticky;top:0;background:#101e23;padding:8px;z-index:2}canvas{display:block;touch-action:none;cursor:crosshair}#viewport{overflow:auto;max-height:75vh;border:1px solid #496b61}small{display:block;margin:10px 0;color:#a9c3b8}#error{color:#ffc497}a{color:#9be6ce}</style>
 <header><a href="/">Poolside</a><h1>Person annotation review</h1>
-<label>Open evaluation folder <input id="folder" type="file" webkitdirectory multiple></label>
+<label>Open annotation folder <input id="folder" type="file" webkitdirectory multiple></label>
+<label>Reviewer <input id="reviewer-name" placeholder="Your name or reviewer ID"></label>
+<button id="restore-draft">Restore browser draft</button>
 <button id="previous">Previous</button><button id="next">Next</button><b id="position">No bundle loaded</b>
 <label>Zoom <select id="zoom"><option value="1">100%</option><option value="2">200%</option><option value="3">300%</option></select></label>
 <label><input id="ignore" type="checkbox">Draw inseparable crowd region</label><button id="undo">Undo last box</button>
@@ -16,11 +18,11 @@
 <div id="error" role="status"></div></header><div id="viewport"><canvas id="canvas"></canvas></div>
 <script type="module">
 const $=id=>document.getElementById(id), canvas=$('canvas'), ctx=canvas.getContext('2d');
-let bundle=null, files=new Map(), index=0, selected=-1, image=null, drag=null, history=[];
+let bundle=null, files=new Map(), index=0, selected=-1, image=null, drag=null, history=[], generation=0;
 const frame=()=>bundle.frames[index];
 function fail(e){$('error').textContent=e.message;}
 function controls(){
-  $('position').textContent=(index+1)+' / '+bundle.frames.length+' · '+frame().split+' · '+frame().time.toFixed(3)+' s';
+  $('position').textContent=(index+1)+' / '+bundle.frames.length+' · '+(frame().source_id??'')+' · '+frame().split+' · '+frame().time.toFixed(3)+' s'+(frame().suggestions?' · MODEL DRAFT: correct misses and false boxes':'');
   $('reviewed').checked=frame().reviewed;
   $('person').replaceChildren(...frame().people.map((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent='Person '+(i+1);return o;}));
   $('person').value=String(selected);
@@ -38,16 +40,18 @@ function draw(){
   ctx.strokeStyle='#ff955d';for(const b of frame().ignore_regions)ctx.strokeRect(b[0]*canvas.width,b[1]*canvas.height,(b[2]-b[0])*canvas.width,(b[3]-b[1])*canvas.height);
 }
 async function show(){
-  const file=files.get(frame().image);if(!file)throw Error('Missing image '+frame().image);
+  const request=++generation, target=frame();
+  const file=files.get(target.image);if(!file)throw Error('Missing image '+target.image);
   const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('');
-  if(hash!==frame().image_sha256)throw Error('Image fingerprint changed.');
-  if(image)image.close();image=await createImageBitmap(file);canvas.width=image.width;canvas.height=image.height;
+  if(hash!==target.image_sha256)throw Error('Image fingerprint changed.');
+  const decoded=await createImageBitmap(file);if(request!==generation){decoded.close();return;}
+  if(image)image.close();image=decoded;canvas.width=image.width;canvas.height=image.height;
   selected=-1;history=[];resize();controls();draw();
 }
 function resize(){canvas.style.width=canvas.width*Number($('zoom').value)+'px';canvas.style.height=canvas.height*Number($('zoom').value)+'px';}
 $('folder').onchange=async e=>{try{
   files=new Map([...e.target.files].map(f=>[f.name,f]));
-  const data=files.get('annotations-reviewed.json')??files.get('annotations.json');if(!data)throw Error('Choose the folder containing annotations.json and frame PNGs.');
+  const data=files.get('annotations-reviewed.json')??files.get('annotations-suggested.json')??files.get('annotations.json');if(!data)throw Error('Choose the folder containing annotations.json and frame PNGs.');
   bundle=JSON.parse(await data.text());if(bundle.schema!=='pool-person-labels/1')throw Error('Unsupported annotation schema.');index=0;await show();$('error').textContent='';
 }catch(e){fail(e);}};
 $('previous').onclick=()=>{if(bundle&&index>0){index--;show().catch(fail);}};
@@ -59,15 +63,19 @@ canvas.onpointermove=e=>{if(!drag)return;draw();const p=point(e);ctx.strokeStyle
 canvas.onpointerup=e=>{if(!drag)return;const p=point(e),b=[Math.min(drag[0],p[0]),Math.min(drag[1],p[1]),Math.max(drag[0],p[0]),Math.max(drag[1],p[1])];drag=null;
   if((b[2]-b[0])*canvas.width<2||(b[3]-b[1])*canvas.height<2)return;
   if($('ignore').checked){frame().ignore_regions.push(b);history.push('ignore');}
-  else{frame().people.push({bbox_xyxy_normalized:b,in_pool:true,tags:[]});selected=frame().people.length-1;history.push('person');}
+  else{frame().people.push({bbox_xyxy_normalized:b,in_pool:bundle.dataset_id?null:true,tags:[]});selected=frame().people.length-1;history.push('person');}
   frame().reviewed=false;controls();draw();
 };
 canvas.onpointercancel=()=>drag=null;
 $('undo').onclick=()=>{if(!bundle)return;const last=history.pop();if(last==='person')frame().people.pop();if(last==='ignore')frame().ignore_regions.pop();selected=-1;frame().reviewed=false;controls();draw();};
 $('person').onchange=e=>{selected=Number(e.target.value);controls();draw();};
-function edit(){const p=frame()?.people[selected];if(!p)return;p.in_pool=$('in-pool').checked;p.tags=[...document.querySelectorAll('.tag:checked')].map(t=>t.value);frame().reviewed=false;$('reviewed').checked=false;}
+function edit(){if(!bundle)return;const p=frame().people[selected];if(!p)return;p.in_pool=$('in-pool').checked;p.tags=[...document.querySelectorAll('.tag:checked')].map(t=>t.value);frame().reviewed=false;$('reviewed').checked=false;}
 $('in-pool').onchange=edit;document.querySelectorAll('.tag').forEach(t=>t.onchange=edit);
 $('delete').onclick=()=>{if(!bundle||selected<0)return;frame().people.splice(selected,1);selected=-1;history=[];frame().reviewed=false;controls();draw();};
-$('reviewed').onchange=e=>{if(bundle)frame().reviewed=e.target.checked;};
+const draftKey=()=> 'pool-box-draft:'+(bundle?.dataset_id??bundle?.source_sha256??'unknown');
+function saveDraft(){if(bundle){try{localStorage.setItem(draftKey(),JSON.stringify(bundle));}catch(e){fail(Error('Browser draft could not be saved. Download your annotations.'));}}}
+$('restore-draft').onclick=async()=>{try{if(!bundle)throw Error('Open the annotation folder first.');const raw=localStorage.getItem(draftKey());if(!raw)throw Error('No browser draft for this dataset.');const saved=JSON.parse(raw);if(saved.dataset_id!==bundle.dataset_id||saved.source_sha256!==bundle.source_sha256)throw Error('Draft belongs to another dataset.');bundle=saved;index=0;await show();}catch(e){fail(e);}};
+document.addEventListener('change',saveDraft);document.addEventListener('pointerup',()=>setTimeout(saveDraft,0));document.addEventListener('click',()=>setTimeout(saveDraft,0));
+$('reviewed').onchange=e=>{if(!bundle)return;const reviewer=$('reviewer-name').value.trim();if(e.target.checked&&bundle.dataset_id&&!reviewer){e.target.checked=false;fail(Error('Enter your reviewer name before approving this frame.'));return;}frame().reviewed=e.target.checked;frame().reviewer=reviewer;frame().reviewed_at=new Date().toISOString();saveDraft();};
 $('save').onclick=()=>{if(!bundle)return;const url=URL.createObjectURL(new Blob([JSON.stringify(bundle,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='annotations-reviewed.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 </script></html>

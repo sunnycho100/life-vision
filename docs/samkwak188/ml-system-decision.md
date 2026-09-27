@@ -1,3 +1,5 @@
+> Current implementation (2026-09-26): pretrained RF-DETR Nano person detection, server-side recorded-video jobs and cached 2D replay. Pose models and temporary IDs have been removed. See [RF-DETR implementation and measured results](rfdetr-implementation.md) and [run instructions](../../frontend/README.md). Earlier model selections below are historical; tracking, drowning assessment and incident review remain later work.
+
 # Pool monitoring: model decision and incident workflow
 
 Date: 2026-09-26. Scope: the user's clarified product—connect a camera/recording, detect and track swimmers, flag suspected drowning, preserve video evidence, and notify a human reviewer. This document supersedes conflicting recommendations in the earlier implementation plan. It distinguishes inspected implementation, research evidence, and proposed engineering settings. It does not claim a new model was trained or validated.

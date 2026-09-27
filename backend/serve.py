@@ -18,10 +18,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from backend.common import ROOT, REFERENCE_SHA, digest, probe, read_json, write_json
 from backend.jobs import JobManager
+from backend.review import install_review_routes
 
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/javascript", ".mjs")
-DEFAULT_MODEL = ROOT / "artifacts/models/rfdetr-nano/manifest.json"
+FINE_TUNED_MODEL = ROOT / "artifacts/models/rfdetr-s-person-v1/manifest.json"  # Joanne's wave-pool RF-DETR Small
+DEFAULT_MODEL = FINE_TUNED_MODEL if FINE_TUNED_MODEL.is_file() else ROOT / "artifacts/models/rfdetr-nano/manifest.json"
 REFERENCE_URL = "https://www.youtube.com/watch?v=PuAfTA2wf7o"
 REFERENCE_VIDEO = ROOT / "artifacts/reference/wave-pool-PuAfTA2wf7o.mp4"
 
@@ -48,7 +50,7 @@ class JobRequest(BaseModel):
 
 
 def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, backend="onnx", provider=None,
-               worker_python=None, max_upload_bytes=2 * 1024**3):
+               worker_python=None, max_upload_bytes=2 * 1024**3, extra_videos=()):
     data = Path(data_dir or ROOT / "artifacts/poolside").resolve()
     sources = data / "sources"
     sources.mkdir(parents=True, exist_ok=True)
@@ -58,6 +60,7 @@ def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, bac
     @asynccontextmanager
     async def lifespan(app):
         yield
+        await asyncio.to_thread(app.state.review.close)
         await asyncio.to_thread(manager.close)
 
     app = FastAPI(title="Poolside person detection", lifespan=lifespan)
@@ -92,7 +95,7 @@ def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, bac
     @app.get("/api/health")
     def health():
         ready = Path(model_manifest).is_file()
-        return {"model": "RF-DETR Nano", "model_manifest_available": ready, "backend": backend,
+        return {"model": read_json(model_manifest).get("label", "RF-DETR Nano") if ready else "RF-DETR Nano", "model_manifest_available": ready, "backend": backend,
                 "message": "Ready to start analysis" if ready else "Run tools/prepare_rfdetr.py in the reference environment first."}
 
     @app.get("/api/reference")
@@ -104,6 +107,11 @@ def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, bac
             return {"available": True, **public(source), "source": REFERENCE_URL}
         except Exception as error:
             return {"available": False, "error": str(error), "sha256": digest(video)}
+
+    @app.get("/api/presets")
+    def presets():
+        """More local recordings shown under the reference in the source list, as (path, label) pairs."""
+        return [{**public(register(Path(path).resolve())), "label": label} for path, label in extra_videos if Path(path).is_file()]
 
     @app.get("/media/reference")
     def reference_media():
@@ -193,6 +201,7 @@ def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, bac
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
 
+    install_review_routes(app, manager, get_source, data)
     app.mount("/", StaticFiles(directory=ROOT / "frontend", html=True), name="frontend")
     return app
 
@@ -207,12 +216,15 @@ if __name__ == "__main__":
     parser.add_argument("--backend", choices=["onnx", "python"], default="onnx")
     parser.add_argument("--provider")
     parser.add_argument("--worker-python", type=Path)
+    parser.add_argument("--extra-video", nargs=2, action="append", default=[], metavar=("PATH", "LABEL"),
+                        help="Another local recording to list as a source; repeatable.")
     args = parser.parse_args()
     if args.video is None:
         try:
             args.video = fetch_reference()
         except Exception as error:
             print(f"Reference download failed, continuing with upload only: {error}", flush=True)
-    uvicorn.run(create_app(args.video, args.data_dir, args.model_manifest, args.backend, args.provider, args.worker_python),
+    uvicorn.run(create_app(args.video, args.data_dir, args.model_manifest, args.backend, args.provider, args.worker_python,
+                           extra_videos=[(Path(path), label) for path, label in args.extra_video]),
                 host=args.host, port=args.port)
 

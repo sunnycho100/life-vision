@@ -1,9 +1,9 @@
 import * as THREE from './vendor/three.module.js';
-import {project, homography, inside, boxAnchor, cameraPose} from './core.mjs';
+import {homography, surfacePosition, cameraPose} from './core.mjs';
 
 export class PoolTwin {
-  constructor(canvas, video) {
-    this.canvas = canvas;
+  constructor(canvas, video, onSelect = () => {}) {
+    this.canvas = canvas; this.video = video;
     this.renderer = new THREE.WebGLRenderer({canvas, antialias: true, alpha: true});
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.scene = new THREE.Scene();
@@ -16,18 +16,32 @@ export class PoolTwin {
     this.videoTexture.colorSpace = THREE.SRGBColorSpace;
     this.theta = .55; this.phi = .82; this.distance = 60; this.revealStart = null;
     this.markerGeometry = new THREE.RingGeometry(.35, .41, 32);
+    this.pinGeometry = new THREE.SphereGeometry(.23, 12, 8);
+    this.stemGeometry = new THREE.CylinderGeometry(.045, .045, .45, 6);
+    this.sharedGeometry = new Set([this.markerGeometry, this.pinGeometry, this.stemGeometry]);
+    this.onSelect = onSelect; this.lastPeople = null;
+    this.raycaster = new THREE.Raycaster();
     this.materials = [0xbdfce0, 0xf2d39b, 0x93deff, 0xb8b6ff, 0xffc5b8].map(color => new THREE.MeshBasicMaterial({color}));
-    let drag = null;
-    canvas.addEventListener('pointerdown', e => {drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId);});
+    let drag = null, moved = 0;
+    canvas.addEventListener('pointerdown', e => {drag = [e.clientX, e.clientY]; moved = 0; canvas.setPointerCapture(e.pointerId);});
     canvas.addEventListener('pointermove', e => {
       if (!drag) return;
+      moved += Math.hypot(e.clientX - drag[0], e.clientY - drag[1]);
       this.theta -= (e.clientX - drag[0]) * .008;
       this.phi = THREE.MathUtils.clamp(this.phi + (e.clientY - drag[1]) * .005, .23, 1.35);
       drag = [e.clientX, e.clientY];
     });
-    canvas.addEventListener('pointerup', () => drag = null);
+    canvas.addEventListener('pointerup', e => {
+      if (drag && moved < 5) {
+        const rect = canvas.getBoundingClientRect();
+        this.raycaster.setFromCamera(new THREE.Vector2((e.clientX - rect.left) / rect.width * 2 - 1, 1 - (e.clientY - rect.top) / rect.height * 2), this.camera);
+        const hit = this.raycaster.intersectObjects(this.people.children, true)[0];
+        this.onSelect(hit?.object.userData.surfacePosition ?? null);
+      }
+      drag = null;
+    });
     canvas.addEventListener('pointercancel', () => drag = null);
-    canvas.addEventListener('wheel', e => {e.preventDefault(); this.distance = THREE.MathUtils.clamp(this.distance * Math.exp(e.deltaY * .001), this.size * .8, this.size * 6);}, {passive: false});
+    canvas.addEventListener('wheel', e => {e.preventDefault(); this.distance = THREE.MathUtils.clamp(this.distance * Math.exp(e.deltaY * .001), this.size * .5, this.size * 6);}, {passive: false});
     this.resize = new ResizeObserver(() => this.resizeCanvas()); this.resize.observe(canvas);
   }
 
@@ -40,17 +54,17 @@ export class PoolTwin {
   clearGroup(group) {
     for (const child of [...group.children]) {
       child.traverse(o => {
-        if (o.geometry && o.geometry !== this.markerGeometry) o.geometry.dispose();
-        if (o.material && !this.materials.includes(o.material)) o.material.dispose();
+        if (o.geometry && !this.sharedGeometry.has(o.geometry)) o.geometry.dispose();
+        if (o.material && !this.materials.includes(o.material)) {o.material.map?.dispose(); o.material.dispose();}
       });
       group.remove(child);
     }
   }
 
   configure(config) {
-    this.config = config; this.clearGroup(this.pool); this.clearGroup(this.people);
+    this.config = config; this.clearGroup(this.pool); this.clearGroup(this.people); this.lastPeople = null; this.onSelect(null); this.canvas.dataset.markerCount = '0';
     const {width: w, length: l, depth: d, water: h, corners} = config;
-    this.size = Math.max(w, l); this.pose = cameraPose(corners, w, l, config.aspect); this.resetCamera();
+    this.size = Math.max(w, l); this.pose = cameraPose(corners, w, l, config.aspect || this.video.videoWidth / this.video.videoHeight || 16 / 9); this.resetCamera();
     this.map = homography(corners, [[-w / 2, -l / 2], [w / 2, -l / 2], [w / 2, l / 2], [-w / 2, l / 2]]);
     const forward = homography([[0, 0], [1, 0], [1, 1], [0, 1]], corners);
     const tile = new THREE.MeshStandardMaterial({color: 0x2c5960, roughness: .8, side: THREE.DoubleSide});
@@ -86,6 +100,15 @@ export class PoolTwin {
     const rim = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(-w / 2, h, -l / 2), new THREE.Vector3(w / 2, h, -l / 2), new THREE.Vector3(w / 2, h, l / 2), new THREE.Vector3(-w / 2, h, l / 2),
     ]), new THREE.LineBasicMaterial({color: 0x9debd7})); this.pool.add(rim);
+    const label = (text, x, z) => {
+      const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 64;
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#c5ffeb'; ctx.font = '28px sans-serif'; ctx.fillText(text, 4, 43);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(canvas), depthTest: false}));
+      sprite.position.set(x, h + .15, z); sprite.scale.set(this.size * .27, this.size * .034, 1); this.pool.add(sprite);
+    };
+    label('1: origin (0, 0)', -w / 2, -l / 2);
+    label(`X: ${w} m`, w / 2, -l / 2);
+    label(`Z: ${l} m`, -w / 2, l / 2);
     this.pool.add(this.cameraMarker(this.pose, w, l, h));
   }
 
@@ -116,21 +139,38 @@ export class PoolTwin {
     this.theta = Math.atan2(x, z) - 1.1; this.phi = .62;
     this.distance = Math.max(this.size * 1.95, Math.hypot(x, z, height) * 2.1);
   }
+  preset(name) { // Top, Front, or from the estimated recording camera
+    const water = this.config.water, {x, z, height, aim} = this.pose;
+    if (name === 'camera') {
+      this.target.set(aim[0], water, aim[1]);
+      const dx = x - aim[0], dz = z - aim[1];
+      this.theta = Math.atan2(dx, dz); this.phi = THREE.MathUtils.clamp(Math.atan2(height, Math.hypot(dx, dz)), .23, 1.35);
+      this.distance = Math.hypot(dx, dz, height) - 2.5 * this.size / 30; // just in front of the lens, not inside the camera model
+    } else {
+      this.target.set(0, water, 0); this.theta = 0;
+      this.phi = name === 'top' ? 1.35 : .3; this.distance = this.size * (name === 'top' ? 1.7 : 1.9);
+    }
+  }
   reveal() {this.revealStart = performance.now();}
 
   updatePeople(detections) {
+    const signature = JSON.stringify(detections);
+    if (signature === this.lastPeople) return;
+    this.lastPeople = signature; this.onSelect(null);
     this.clearGroup(this.people);
     if (!this.config) return;
     for (const detection of detections) {
-      const [x, y] = boxAnchor(detection.bbox_xyxy_normalized);
-      if (!inside([x, y], this.config.corners)) continue;
-      const loc = project(this.map, x, y);
+      const loc = surfacePosition(detection, this.config);
       if (!loc) continue;
+      const x = loc.x - this.config.width / 2, z = loc.z - this.config.length / 2;
       const ring = new THREE.Mesh(this.markerGeometry, this.materials[0]);
       ring.rotation.x = -Math.PI / 2;
-      ring.position.set(loc[0], this.config.water + .025, loc[1]);
-      this.people.add(ring);
+      ring.position.set(x, loc.y + .025, z);
+      const pin = new THREE.Mesh(this.pinGeometry, this.materials[0]); pin.position.set(x, loc.y + .5, z);
+      const stem = new THREE.Mesh(this.stemGeometry, this.materials[0]); stem.position.set(x, loc.y + .25, z);
+      for (const marker of [ring, pin, stem]) {marker.userData.surfacePosition = loc; this.people.add(marker);}
     }
+    this.canvas.dataset.markerCount = this.people.children.length / 3;
   }
 
   render(now) {
@@ -140,7 +180,9 @@ export class PoolTwin {
     this.waterMaterial.uniforms.textureMix.value = 1 - eased;
     this.waterMaterial.uniforms.clock.value = now / 1300;
     const phi = this.phi - (1 - eased) * .2;
-    this.camera.position.set(this.distance * Math.sin(this.theta) * Math.cos(phi), this.distance * Math.sin(phi), this.distance * Math.cos(this.theta) * Math.cos(phi)).add(this.target);
+    // Preserve horizontal coverage when the split/mobile viewport becomes narrow.
+    const distance = this.distance * Math.max(1, 1 / this.camera.aspect);
+    this.camera.position.set(distance * Math.sin(this.theta) * Math.cos(phi), distance * Math.sin(phi), distance * Math.cos(this.theta) * Math.cos(phi)).add(this.target);
     this.camera.lookAt(this.target);
     this.renderer.render(this.scene, this.camera);
   }

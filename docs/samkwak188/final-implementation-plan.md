@@ -1,3 +1,5 @@
+> Current implementation (2026-09-26): pretrained RF-DETR Nano person detection, server-side recorded-video jobs and cached 2D replay. Pose models and temporary IDs have been removed. See [RF-DETR implementation and measured results](rfdetr-implementation.md) and [run instructions](../../frontend/README.md). Earlier model selections below are historical; tracking, drowning assessment and incident review remain later work.
+
 # Final implementation recommendation: 24-hour pool-monitoring prototype
 
 > Updated direction: the user clarified the product as camera input → swimmer tracking → suspected-drowning review → saved incident clip → human disposition. Read the [current ML system decision](ml-system-decision.md) for the latest model choice, implementation audit, recording requirement and research findings. The plan below is preserved as the earlier 24-hour proposal; its initial repository inventory and YOLO11n selection predate the YOLOv8 browser prototype.

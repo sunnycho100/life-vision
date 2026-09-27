@@ -67,7 +67,7 @@ class JobManager:
             spec = {"schema": "detections/1", "source_id": source["id"], "source_sha256": source["sha256"],
                     "source": source, "start": start, "end": min(end, source["duration"]), "sample_hz": 10,
                     "sampling": "first distinct frame at/after target; source PTS minus stream start",
-                    "stored_threshold": .2, "display_threshold": .5,
+                    "stored_threshold": .1, "display_threshold": .5,
                     "tiling": {"grid": [3, 2], "overlap": .25} if self.backend == "python" else False,
                     "model_manifest": model, "model_manifest_sha256": digest(self.manifest_path),
                     "backend": self.backend, "provider": self.provider, "pipeline_version": 2,
@@ -88,8 +88,8 @@ class JobManager:
             spec.update(job_id=job_id, fingerprint=fingerprint, model_manifest_path=str(self.manifest_path))
             write_json(directory / "manifest.json", spec)
             status = {"id": job_id, "source_id": source["id"], "state": "starting", "progress": 0,
-                      "frames_analyzed": 0, "incomplete": True, "created": time.time(), "model": "RF-DETR Nano",
-                      "backend": self.backend, "start": start, "end": end, "stored_threshold": .2}
+                      "frames_analyzed": 0, "incomplete": True, "created": time.time(), "model": model.get("label", "RF-DETR Nano"),
+                      "backend": self.backend, "start": start, "end": end, "stored_threshold": .1}
             write_json(directory / "status.json", status)
             observation_db(directory / "observations.sqlite3").close()
             try:

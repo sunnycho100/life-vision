@@ -4,6 +4,7 @@ import json
 import math
 import os
 import uuid
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,7 +29,19 @@ def write_json(path, data):
     path = Path(path)
     temp = path.with_suffix(path.suffix + "." + uuid.uuid4().hex + ".tmp")
     temp.write_text(json.dumps(data, indent=2, allow_nan=False), encoding="utf-8")
-    os.replace(temp, path)
+    # Windows readers/virus scanners can briefly deny replacement of an open file.
+    # Preserve the prior complete JSON and retry; never expose a half-written status.
+    try:
+        for attempt in range(30):
+            try:
+                os.replace(temp, path)
+                break
+            except PermissionError:
+                if attempt == 29:
+                    raise
+                time.sleep(min(.01 * (attempt + 1), .1))
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def probe(path):

@@ -22,23 +22,24 @@
     <div class="workspace">
       <aside id="setup-panel" class="setup-panel">
         <section id="source-panel">
-          <h2>Source</h2><p>Fixed camera, clear view of the water.</p>
-          <button id="reference-button" class="source-card" disabled><strong>Wave pool recording</strong><small>2:09 · YouTube reference</small></button>
-          <a class="source-link" href="https://www.youtube.com/watch?v=PuAfTA2wf7o" target="_blank" rel="noreferrer">View original on YouTube</a>
-          <div class="or">or</div>
-          <label class="upload-zone" for="video-file"><strong>Upload a video</strong><small>MP4 or WebM</small></label><input id="video-file" type="file" accept="video/mp4,video/webm" hidden>
-          <p class="note">Counts may include missed or duplicate people.</p>
+          <h2>Source</h2>
+          <div class="source-list">
+            <button id="reference-button" class="source-row" disabled><strong>Wave pool recording</strong><small>2:09 · YouTube</small></button>
+            <label class="source-row upload-row" for="video-file"><strong>Upload video</strong><small>MP4 or WebM</small><span class="plus" aria-hidden="true">+</span></label><input id="video-file" type="file" accept="video/mp4,video/webm" hidden>
+          </div>
+          <a class="source-link" href="https://www.youtube.com/watch?v=PuAfTA2wf7o" target="_blank" rel="noreferrer">Original on YouTube</a>
         </section>
         <section id="calibrate-panel" hidden>
-          <h2>Pool area</h2><p>Drag the four corners around the water, clockwise from the far left.</p>
-          <div class="calibration-note">The reference markers approximate the visible region, not the entire pool.</div>
+          <h2>Pool area</h2><p>Drag the four markers around a rectangular patch of water. Start at the far left and go clockwise. Add corners to cover more of the pool; the 3D view needs exactly four.</p>
+          <div class="corner-actions"><button id="add-corner" class="secondary">Add corner</button><button id="remove-corner" class="text-button">Remove last corner</button></div>
+          <input id="measured-plane" type="checkbox" hidden>
           <div class="field-grid"><label>Width <span>m</span><input id="pool-width" type="number" min="2" max="100" step="0.5" value="20"></label><label>Length <span>m</span><input id="pool-length" type="number" min="2" max="100" step="0.5" value="30"></label><label>Wall height <span>m</span><input id="pool-depth" type="number" min="0.3" max="10" step="0.1" value="1.5"></label><label>Water height <span>m</span><input id="water-height" type="number" min="0.1" max="10" step="0.1" value="1.1"></label></div>
 <button id="scan-button" class="primary">Analyze recording</button><button id="last-analysis" class="secondary" hidden>Review last analysis</button><details class="more-settings"><summary>Time settings</summary>
           <p class="micro">Analyzes the whole video by default.</p>
           <div class="field-grid"><label>Analyze from <span>seconds</span><input id="analysis-start" type="number" min="0" step="0.2" value="0"></label><label>Analyze until <span>seconds</span><input id="analysis-end" type="number" min="0.2" step="0.2"></label></div>
           <label class="field-label">Mapping valid until <span>seconds</span><input id="mapping-end" type="number" min="1" step="1" value="95"></label>
           <p class="micro">Mapping starts at this frame. Stop before the reference zoom at 1:35, or before any camera movement in your own clip.</p>
-          </details><button id="calibration-import" class="text-button">Import box results</button><button id="back-button" class="text-button">Change video</button>
+          </details><button id="calibration-import" class="text-button">Import existing box results</button><button id="back-button" class="text-button">← Change recording</button>
         </section>
         <section id="scan-panel" hidden>
           <h2>Analysis</h2><p>Running on the server. You can review results while it runs.</p>
@@ -50,29 +51,52 @@
           <h2>Review</h2>
           <div class="stat-grid"><div><strong id="person-count">0</strong><span>person boxes - entire frame</span></div><div><strong id="inference-time">—</strong><span>inference / ms</span></div></div>
           <div class="view-switch" role="group" aria-label="View"><button data-view="video" class="selected">Footage</button><button data-view="split">Both</button><button data-view="twin">Digital twin</button></div>
-          <div class="twin-details"><div><span>Water region</span><b id="region-size">20 × 30 m</b></div><div><span>Geometry</span><b>Estimated</b></div><div><span>Inside outline - estimated</span><b id="pool-count">&mdash;</b></div><div><span>Model</span><b>RF-DETR Nano</b></div><div><span>Processing</span><b id="delegate">Starting</b></div></div>
-          <label class="field-label">Display confidence <span id="threshold-value">0.20</span><input id="confidence" type="range" min="0.2" max="0.95" step="0.01" value="0.2"></label><p id="job-status" class="micro" aria-live="polite"></p><button id="cancel-job" class="text-button" hidden>Cancel analysis</button><button id="recalibrate-button" class="secondary">Adjust pool mapping</button>
-          <button id="export-button" class="text-button">Export setup</button>
-          <button id="tracking-button" class="text-button">Import box results</button><input id="tracking-file" type="file" accept=".json,application/json" hidden>
+          <div class="twin-details"><div><span>Water region</span><b id="region-size">20 × 30 m</b></div><div><span>Calibration</span><b id="calibration-kind">Approximate</b></div><div><span>Inside outline - estimated</span><b id="pool-count">&mdash;</b></div><div><span>Processing</span><b id="delegate">Starting</b></div></div>
+          <p id="surface-position" class="micro" aria-live="polite">Pause and select a 3D marker to inspect its estimated position across the water.</p>
+          <label class="field-label">Display confidence <span id="threshold-value">0.20</span><input id="confidence" type="range" min="0.2" max="0.95" step="0.01" value="0.2"></label><p id="job-status" class="micro" aria-live="polite"></p><button id="cancel-job" class="text-button" hidden>Cancel analysis</button><button id="new-analysis" class="text-button" hidden>Run a new analysis</button><button id="recalibrate-button" class="secondary">Adjust pool mapping <span>↗</span></button>
+          <button id="export-button" class="text-button">↓ Export setup</button>
+          <button id="tracking-button" class="text-button">↑ Import existing box results</button><input id="tracking-file" type="file" accept=".json,application/json" hidden>
           <button id="resume-inference" class="text-button" hidden>Return to server results</button>
-          <p class="micro">No identity tracking or drowning classification in this version. Pool membership and 3D positions are approximate.</p>
+          <div class="review-build">
+            <button id="build-review" class="primary" disabled>Build review events</button>
+            <p id="review-analysis-status" class="micro" role="status">Complete person analysis to build persistent tracks and visibility-loss review events.</p>
+            <progress id="review-analysis-progress" max="1" value="0" hidden aria-label="Review analysis progress"></progress>
+            <p id="review-range" class="micro"></p>
+          </div>
+          <p class="micro">Tracking can lose or switch identities. Head/submersion modeling is incomplete. Visibility-loss events flag concern for human review; they are not a drowning diagnosis. Pool membership and 3D positions are approximate.</p>
         </section>
+    <section id="event-review" class="event-review" hidden aria-label="Visibility-loss event review">
+      <div class="review-heading"><div><h2>Review queue</h2><p id="incident-count" aria-live="polite">No events loaded</p></div><button id="enable-alerts" class="secondary" aria-pressed="false">Enable sound</button></div>
+      <p class="review-legend"><span>Mint: visible</span><span>Yellow: review concern</span><span>Red: urgent review</span> Visibility is not a safety assessment.</p>
+      <p id="track-states" class="micro" aria-live="polite">Track states unavailable at this time.</p>
+      <div id="track-details" class="track-details" aria-label="Current track states"></div>
+      <label class="field-label">Queue filter <select id="incident-filter"><option value="pending">Needs review</option><option value="all">All events</option><option value="confirmed_concern">Confirmed concern</option><option value="dismissed">Dismissed</option></select></label>
+      <div id="incident-list" class="incident-list"></div>
+      <article id="incident-detail" class="incident-detail" hidden>
+        <h3 id="incident-title"></h3><p id="incident-reason"></p><p id="incident-decision" class="micro"></p>
+        <div class="incident-actions"><button id="seek-incident" class="secondary">Seek source recording</button><a id="download-clip" class="secondary" download>Download clip</a></div>
+        <p id="clip-status" class="micro"></p><video id="incident-video" controls preload="metadata" playsinline hidden aria-label="Saved review clip"></video>
+        <label class="field-label" for="incident-note">Review note</label><textarea id="incident-note" maxlength="4000" rows="3" placeholder="Describe what you observed"></textarea>
+        <div class="incident-actions"><button data-decision="confirmed_concern" class="secondary">Confirm concern</button><button data-decision="dismissed" class="secondary">Dismiss</button><button data-decision="needs_review" class="secondary">Needs review / save note</button></div>
+        <p id="review-save-status" class="micro" role="status"></p>
+      </article>
+    </section>
         <div id="message" role="status" aria-live="polite" hidden></div>
       </aside>
       <section class="viewer-area" aria-label="Video and digital twin">
         <div class="viewer-top"><span><i class="status-dot"></i><b id="viewer-title">REFERENCE / WAVE POOL</b></span><span id="viewer-meta">RECORDED FOOTAGE</span></div>
         <div id="stage" class="stage">
-          <div id="video-pane" class="video-pane"><video id="video" preload="auto" playsinline muted></video><canvas id="overlay" aria-label="Pool calibration and person boxes"></canvas><div id="handles"></div><div id="video-empty"><div class="empty-card"><p>No video</p><small>Pick a source from the menu</small></div></div></div>
-          <div id="three-pane" class="three-pane"><canvas id="three-canvas" aria-label="Interactive estimated 3D pool"></canvas><div class="scene-label">Estimated 3D view</div><div class="orbit-hint">Drag to orbit · Scroll to zoom</div><button id="reset-camera" aria-label="Reset 3D camera">⌖</button></div>
-          <div id="scan-effect" hidden><div class="scan-line"></div><div class="scan-chip"><i></i>Analyzing frames</div></div>
+          <div id="video-pane" class="video-pane"><video id="video" preload="auto" playsinline muted></video><canvas id="overlay" aria-label="Pool calibration and person boxes"></canvas><div id="handles"></div><div id="video-empty"><p>No video</p><small>Pick a source from the menu</small></div></div>
+          <div id="three-pane" class="three-pane"><canvas id="three-canvas" aria-label="Interactive estimated 3D pool"></canvas><div class="scene-label">Water-plane position estimates</div><div class="orbit-hint">Drag to orbit · Scroll to zoom · Select a marker</div><div class="view-presets"><button data-preset="top">Top</button><button data-preset="front">Front</button><button data-preset="camera">Camera</button></div><button id="reset-camera" aria-label="Reset 3D camera">⌖</button></div>
+          <div id="scan-effect" hidden><div class="scan-line"></div><div class="scan-chip"><i></i> ANALYZING RECORDED FRAMES</div></div>
           <div id="zoom-warning" hidden><strong>Camera framing has changed.</strong><span>The water mapping ends here. Recalibrate this segment to continue the 3D view.</span><button id="zoom-recalibrate">Recalibrate segment →</button></div>
-          <div id="hud" class="hud" hidden><strong id="hud-people">0</strong> people detected</div>
+          <div id="hud" class="hud" hidden><strong id="hud-people">0</strong> people detected<div id="hud-alert" hidden></div><div id="hud-back" hidden></div></div>
         </div>
         <div class="transport"><button id="play-button" aria-label="Play recording" disabled>▶</button><span id="time-current">0:00</span><input id="timeline" aria-label="Seek recording" type="range" min="0" max="129" step="0.01" value="0" disabled><span id="time-total">2:09</span><button id="speed-button" title="Playback speed">1x</button><button id="mute-button" aria-label="Toggle audio">⌁</button></div>
         <div class="viewer-footer"><span id="tracking-status">Awaiting source connection</span><span>RECORDED ANALYSIS <i>↗</i></span></div>
       </section>
     </div>
-    <footer><span><i></i> Video is processed and stored on the connected server.</span><span>Person detection prototype - no drowning assessment</span></footer>
+    <footer><span><i></i> Video is processed and stored on the connected server.</span><span>Visibility-loss review prototype - no drowning assessment</span></footer>
   </main>
   <script type="module" src="./app.js"></script>
 </body>

@@ -22,6 +22,7 @@ Name files by what they show, e.g. `before_stock_rfdetr_default_tracker.mp4`, no
 | `videos/after_finetuned_rfdetr_edge_logic.mp4` | After: RF-DETR-N fine-tuned on sim + edge logic, 4 IDs for 4 people | `sim/eval_detectors.py --scenario resurface --detector <sim_rfdetr checkpoint> --track --edge --video --no-gt` |
 | `images/sim_pool_scene.png` | Still of the sim pool | frame at 5 s of `sim_raw_baseline.mp4` |
 | `images/before_after_tracking.png` | Same frame (6 s), before vs after, side by side | frames of the two videos above |
+| `images/isaac_sim_pool_editor.png` | Isaac Sim 6.1 editor with the backyard pool scene: 5 animated people, water volume, stage tree | screenshot of `sim/isaac/pool_scene.py` + `pool_anim.py` running live in the Isaac Sim window (RTX Real-Time) |
 | `data/sim_results.csv` | Detector and tracker results on the held-out sim scenario | [docs/global/simulation.md](../docs/global/simulation.md) |
 
 ## Rules for slides

@@ -1,6 +1,6 @@
 # Global Docs
 
-The current, agreed plan. Start here.
+The plan we agreed on during the hackathon, plus the simulation results. For what was actually built and how to run it, start with the [main README](../../README.md).
 
 | File | What |
 |---|---|

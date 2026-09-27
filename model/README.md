@@ -1,10 +1,19 @@
 # model
 
-- `detector/` (Joanne, joannemiki57): pretrained YOLO person detection and head evidence. Optional fine-tune on the Mibugi dataset.
-- `pose/` (Sam, samkwak188): optional YOLO-Pose features for the yellow "distress" state.
-- `eval/` (Sam): metrics script, time to alarm, false alarms per hour, missed events.
+Detector training and the alarm rules. Two tracks of work ended up here:
 
-See [docs/global/architecture.md](../docs/global/architecture.md).
+1. **Trained on Isaac Sim** (Rohan): YOLO11n and RF-DETR Small fine-tuned on path-traced pool frames, with two classes (`swimming`, `underwater`) and a GREEN / ORANGE / RED timer. This proved the full pipeline, from detection to alarm, against exact simulator answers.
+2. **Fine-tuned on a real wave pool** (Joanne): RF-DETR Small fine-tuned on 80 hand-labeled YouTube frames. This is the model the review app runs, because sim-only models don't carry over to real people.
+
+| File | What |
+|---|---|
+| `train_yolo.py`, `train_rfdetr.py` | Fine-tune YOLO11n or RF-DETR Small on Isaac Sim frames (same 261 frames and split) |
+| `alert_rules.py` | The shared GREEN / ORANGE / RED rules (below) |
+| `detect_drowning.py`, `detect_drowning_rfdetr.py` | Detector + ByteTrack + underwater timer on a video, scored against sim ground truth with `--gt` |
+| `benchmark_isaac.py` | Scores any detector on an Isaac clip, split by head above vs fully under water |
+| `detect_people_rfdetr_s.py` | RF-DETR Small person detection with overlapping tiles, for small far-away swimmers (the app's tiling comes from this) |
+| `finetune_rfdetr_s_colab.zip` | The real wave-pool fine-tuning notebook, with its outputs |
+| `run_pipeline.ps1` | Renders the Isaac test clip, trains, and runs detection in one go |
 
 ## Isaac Sim baseline (Rohan): YOLO11n + ByteTrack + underwater timer
 
@@ -65,7 +74,9 @@ Found = matched to the true full-body box at IoU 0.5. Measured 2026-09-26.
 | Sunny's `sim_yolo11n.pt` | MuJoCo capsule bodies | 0.67 | 81% | 83% | 182/235 |
 | **Ours `pool_yolo11n`** | 261 Isaac frames, 40 epochs, about 12 min on an RTX 4070 Laptop | 0.95 | **100%** | **95%** | 221/235 |
 
-Our model also labels the state: YOLO test mAP50 is 0.98 (swimming P 0.97 / R 0.99, underwater P 0.95 / R 0.93). The COCO models only say "person", so they can't tell an underwater person from a swimmer, and in clear water a missing-person timer never starts because they keep seeing people on the bottom. RF-DETR-S is the strongest model with no fine-tuning, so it's the better starting point for real footage.
+RF-DETR Small fine-tuned on the same 261 frames (`train_rfdetr.py`) found 99% of swimmers (class right 98%) and 98% of underwater people (class right 94%) on this clip.
+
+Our YOLO11n also labels the state: YOLO test mAP50 is 0.98 (swimming P 0.97 / R 0.99, underwater P 0.95 / R 0.93). The COCO models only say "person", so they can't tell an underwater person from a swimmer, and in clear water a missing-person timer never starts because they keep seeing people on the bottom. RF-DETR-S is the strongest model with no fine-tuning, so it's the better starting point for real footage.
 
 Drowning alarms with our model (warn at 5 s under, alarm at 12 s or 8 s if still):
 
@@ -108,6 +119,8 @@ Two fixes in `detect_drowning.py` got the false alerts to zero on this clip: cla
 |---|---|---|---|---|---|
 | RF-DETR-S (COCO) | 0.569 | 0.321 | 0.754 | 0.266 | 0.393 |
 | **RF-DETR-S fine-tuned** | **0.809** | **0.504** | 0.675 | **0.838** | **0.748** |
+
+This is the detector the review app runs, on the Mac GPU with full frame + 3x2 tiles. Setup: [backend/README.md](../backend/README.md#the-model).
 
 Weights (127 MB, too large for git): [release `rfdetr-s-person-v1`](https://github.com/sunnycho100/life-vision/releases/tag/rfdetr-s-person-v1)
 

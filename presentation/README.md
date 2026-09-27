@@ -1,6 +1,6 @@
 # Presentation assets
 
-Everything that goes into the slides: videos, images, charts, and the numbers behind them. Start with the [final team deck](slides/final/life-vision-team-refined.pptx) and [final team script](presenter-script-team-refined.md). The earlier narrative remains in [docs/presentation.md](../docs/presentation.md) as supporting material.
+Everything that goes into the LifeVision slides: videos, images, charts, and the numbers behind them. Most of the videos come from our simulations (MuJoCo and Isaac Sim), since there is no real drowning footage to show. Start with the [final team deck](slides/final/life-vision-team-refined.pptx) and [final team script](presenter-script-team-refined.md). The earlier narrative remains in [docs/presentation.md](../docs/presentation.md) as supporting material.
 
 | Folder | What goes here |
 |---|---|

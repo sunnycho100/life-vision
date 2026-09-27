@@ -1,6 +1,6 @@
 # Simulation videos
 
-Raw MuJoCo camera views, no boxes drawn. 960x540, 30 fps, corner CCTV camera.
+The five MuJoCo test scenarios we used to score detectors, the tracker, and the alarm logic against exact answers. Raw camera views, no boxes drawn. 960x540, 30 fps, corner CCTV camera.
 Ground truth for each video (boxes, head above or below water) is in `data/sim_scenarios/<name>.tracks_gt.json`.
 
 | Video | Length | What happens |

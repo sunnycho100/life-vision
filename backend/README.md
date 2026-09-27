@@ -1,5 +1,65 @@
 # backend
 
-Local server for the review app in [frontend/](../frontend/). `serve.py` runs a FastAPI server, `worker.py` runs RF-DETR Nano (`detector.py`) and the person tracker (`tracking.py`) over the video, and results are stored per job in SQLite. See [frontend/README.md](../frontend/README.md) for how to run it.
+The local server behind the review app in [`frontend/`](../frontend/). It takes a pool video, runs the detector and tracker over it in a separate worker process, stores the results, and serves them back to the browser.
 
-Contracts: [docs/global/architecture.md](../docs/global/architecture.md#data-contracts).
+| File | What |
+|---|---|
+| `serve.py` | FastAPI server: sources (videos), jobs, observations, and the static frontend |
+| `worker.py` | One analysis job: samples 10 frames per video second, detects, tracks, writes results to SQLite |
+| `detector.py` | RF-DETR wrappers. Loads the fine-tuned RF-DETR Small or the stock Nano from a model manifest, plus full frame + 3x2 tiling |
+| `tracking.py` | `PoolTracker`: ByteTrack plus our ID rules (plausible moves only, re-linking people who resurface) and the missing, warning, and alarm levels |
+| `monitoring.py` | Incident review over a finished job: who was inside the pool outline, for how long they were out of sight, and when to warn |
+| `review.py`, `clip_worker.py` | Review API and short incident clips |
+| `common.py`, `jobs.py` | Video probing and sampling, job bookkeeping |
+
+## Run it
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r backend/requirements-reference.txt
+.venv/bin/python backend/serve.py --backend python
+```
+
+Open http://127.0.0.1:5173. Without `--video`, the server downloads the wave-pool reference video from YouTube once into `artifacts/reference/`.
+
+Useful options:
+
+| Option | What |
+|---|---|
+| `--video PATH` | The reference video shown first in the source list |
+| `--extra-video PATH LABEL` | Another local video to list as a source (repeatable) |
+| `--model-manifest PATH` | Which model to load (see below) |
+| `--provider mps` or `cpu` | Where the model runs. Defaults to the Mac GPU (MPS) when available |
+| `--port`, `--data-dir` | Port, and where jobs and uploads are stored (default `artifacts/poolside/`) |
+
+## The model
+
+By default the server uses Joanne's RF-DETR Small, fine-tuned on real wave-pool frames, if its files are in `artifacts/models/rfdetr-s-person-v1/`. Otherwise it falls back to stock RF-DETR Nano in `artifacts/models/rfdetr-nano/`.
+
+To set up the fine-tuned model, download `rfdetr_s_person_best.pth` from the [`rfdetr-s-person-v1` release](https://github.com/sunnycho100/life-vision/releases/tag/rfdetr-s-person-v1) into `artifacts/models/rfdetr-s-person-v1/`, and save this next to it as `manifest.json`:
+
+```json
+{
+  "label": "RF-DETR Small (fine-tuned)",
+  "model": "RFDETRSmall", "rfdetr_version": "1.11.0", "resolution": 512, "precision": "fp32",
+  "person_id": 0, "num_classes": 1, "class_names": {"0": "person"}, "background_id": null, "num_select": 300,
+  "checkpoint": {"file": "rfdetr_s_person_best.pth",
+                 "sha256": "<sha256 of the .pth file>"},
+  "parity": {"passed": false}
+}
+```
+
+Get the hash with `shasum -a 256 rfdetr_s_person_best.pth`. The server checks it before loading.
+
+On a MacBook GPU, 10 s of video takes about 48 s to process (88 s with stock Nano on CPU). Most of the time goes to the six tiles per frame.
+
+After changing `tracking.py`, re-run only the tracker over a finished job instead of re-detecting: `.venv/bin/python -m tools.retrack_job artifacts/poolside/jobs/<job id>`.
+
+## Tests
+
+```bash
+.venv/bin/pip install -r backend/requirements-dev.txt
+.venv/bin/python -m pytest backend -q
+```
+
+Data contracts: [docs/global/architecture.md](../docs/global/architecture.md#data-contracts).

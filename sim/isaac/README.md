@@ -1,7 +1,8 @@
 # sim/isaac
 
-Synthetic backyard-pool data from Isaac Sim 6.1, with exact labels (boxes, track IDs, and
-whether each head is above, partly under, or fully under the water).
+The realistic half of our simulation work (Rohan). The MuJoCo sim showed the pipeline works, but its capsule bodies and flat water look nothing like a real pool. Here the pool is path-traced in NVIDIA Isaac Sim 6.1: the water surface moves every frame, light refracts through the waves, and six animated people swim, float, dive, struggle, and sink. Every frame comes with exact labels (boxes, track IDs, and whether each head is above, partly under, or fully under the water), so we can train detectors on it and score the alarms against the true times.
+
+Results of the detectors trained here: [model/README.md](../../model/README.md#results-on-the-held-out-seed-0-clip-300-frames-1500-person-boxes-526-with-the-head-fully-under). Demo videos: [`presentation/videos/`](../../presentation/videos/).
 
 | Script | Output |
 |---|---|
@@ -9,6 +10,7 @@ whether each head is above, partly under, or fully under the water).
 | `pool_replicator.py` | Random still images from an overhead and an underwater camera, with YOLO labels, for detector training. |
 | `pool_scene.py` | Shared scene: tiled pool, paver deck, HDR sky, 6 human characters with work gear (hats, vests, radios, badges, lab coats) hidden. The water is one closed mesh whose top surface moves every frame: ambient waves with real water dispersion, plus rings spreading from each person. People are placed and labeled by **head center**, with optional body roll and scale (0.62 = child). |
 | `pool_anim.py` | Procedural body motion (arms, hands, legs, spine, head): front crawl with breathing, treading, back float, a child's dog paddle, streamline dive, underwater breaststroke, the drowning response, and a limp float. A per-person `wobble` keeps motions irregular. |
+| `pool_flythrough.py` | Runs `pool_video.py` with a camera that tours the backyard and settles into the CCTV view, for the demo video. |
 | `make_training_set.ps1` | Renders the 261-frame YOLO training set (81 random stills + 3 scripted clips, seeds 1-3). |
 
 ## Status and limits

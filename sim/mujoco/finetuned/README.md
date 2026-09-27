@@ -2,7 +2,7 @@
 
 `sim_yolo11n.pt`: YOLO11n fine-tuned on MuJoCo pool frames to detect `person` (1 class). 5.4 MB.
 
-It knows the MuJoCo capsule bodies only. It is a test tool for the sim pipeline, not a model for real footage.
+It was our first proof that simulator labels work: stock YOLO11n found a quarter of the simulated people, and this model, trained on 180 frames the simulator labeled for free, found all of them in a scenario it never saw. It knows the MuJoCo capsule bodies only, so it is a test tool for the sim pipeline, not a model for real footage. On the Isaac Sim clip it found 83% of people with their head fully under water, against 16% for stock YOLO11n (see [model/README.md](../../../model/README.md)).
 
 ## How it was trained
 

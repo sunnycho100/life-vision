@@ -96,3 +96,26 @@ The diver's false warning comes from the timer starting at the first underwater 
 Two fixes in `detect_drowning.py` got the false alerts to zero on this clip: class-agnostic NMS (one box per person), and a stricter merge rule. A new track now takes over a lost person's timer only if it is also underwater and within half a body of where they were lost. Before that, a swimmer passing a sinking person took over their identity and timer.
 
 **Caveat:** train and test are both synthetic, from the same scene and characters. A good score here shows the pipeline works end to end. It says nothing yet about real pools. Test on real footage next.
+
+## RF-DETR-S fine-tuned on real wave-pool footage (Joanne)
+
+`finetune_rfdetr_s_colab.ipynb` fine-tunes COCO-pretrained RF-DETR-S on `data/aquaperson_wavepool_v1` (80 YouTube wave-pool frames, one box per visible person, submerged parts not boxed). The notebook is saved with its outputs from the Colab run.
+
+- Split: 62 train / 16 valid frames (valid = `NycwxaU4GPw_065` to `_080`, 680 person boxes)
+- rfdetr 1.11.0, single class `person`, training scale 672, early stopped with best EMA mAP at epoch 25
+
+| Model (valid set) | AP50 | AP50:95 | Precision @0.25 | Recall @0.25 | F1 |
+|---|---|---|---|---|---|
+| RF-DETR-S (COCO) | 0.569 | 0.321 | 0.754 | 0.266 | 0.393 |
+| **RF-DETR-S fine-tuned** | **0.809** | **0.504** | 0.675 | **0.838** | **0.748** |
+
+Weights (127 MB, too large for git): [release `rfdetr-s-person-v1`](https://github.com/sunnycho100/life-vision/releases/tag/rfdetr-s-person-v1)
+
+```python
+# pip install rfdetr==1.11.0
+from rfdetr import RFDETRSmall
+model = RFDETRSmall.from_checkpoint("rfdetr_s_person_best.pth")
+detections = model.predict("frame.jpg", threshold=0.25)
+```
+
+Caveat: 16 validation frames all come from the same video as part of the training set, so these numbers are optimistic for other pools.

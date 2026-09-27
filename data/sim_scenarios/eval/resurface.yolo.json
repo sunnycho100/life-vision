@@ -1,0 +1,20 @@
+{
+  "scenario": "resurface",
+  "detector": "yolo",
+  "frames_scored": 300,
+  "precision": 1.0,
+  "recall": 0.252,
+  "tp": 302,
+  "fp": 0,
+  "fn": 898,
+  "recall_head_above": 0.295,
+  "recall_head_below": 0.021,
+  "boxes_head_below": 189,
+  "tracking": {
+    "2": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 298
+    }
+  }
+}

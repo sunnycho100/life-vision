@@ -1,0 +1,30 @@
+{
+  "scenario": "entry",
+  "detector": "sim/mujoco/finetuned/sim_yolo11n.pt",
+  "frames_scored": 180,
+  "precision": 0.998,
+  "recall": 1.0,
+  "tp": 540,
+  "fp": 1,
+  "fn": 0,
+  "recall_head_above": 1.0,
+  "recall_head_below": 1.0,
+  "boxes_head_below": 19,
+  "tracking": {
+    "0": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 179
+    },
+    "1": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 180
+    },
+    "2": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 180
+    }
+  }
+}

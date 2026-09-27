@@ -1,0 +1,41 @@
+{
+  "scenario": "resurface",
+  "detector": "rfdetr",
+  "frames_scored": 300,
+  "precision": 0.862,
+  "recall": 0.794,
+  "tp": 953,
+  "fp": 152,
+  "fn": 247,
+  "recall_head_above": 0.83,
+  "recall_head_below": 0.603,
+  "boxes_head_below": 189,
+  "tracking": {
+    "0": {
+      "distinct_ids": 2,
+      "id_switches": 1,
+      "frames_matched": 134,
+      "gaps": 24
+    },
+    "1": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 289,
+      "gaps": 5
+    },
+    "2": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 298,
+      "gaps": 0
+    },
+    "3": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 179,
+      "gaps": 15
+    }
+  },
+  "ids_shown": 5,
+  "people_in_scene": 4
+}

@@ -1,0 +1,35 @@
+{
+  "scenario": "crossing",
+  "detector": "sim/mujoco/finetuned/sim_yolo11n.pt",
+  "frames_scored": 240,
+  "precision": 0.998,
+  "recall": 1.0,
+  "tp": 960,
+  "fp": 2,
+  "fn": 0,
+  "recall_head_above": 1.0,
+  "recall_head_below": 1.0,
+  "boxes_head_below": 14,
+  "tracking": {
+    "0": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 240
+    },
+    "1": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 240
+    },
+    "2": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 240
+    },
+    "3": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 240
+    }
+  }
+}

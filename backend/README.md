@@ -1,6 +1,5 @@
 # backend
 
-Owner: Person 4 (Backend)
+Local server for the review app in [frontend/](../frontend/). `serve.py` runs a FastAPI server, `worker.py` runs RF-DETR Nano (`detector.py`) and the person tracker (`tracking.py`) over the video, and results are stored per job in SQLite. See [frontend/README.md](../frontend/README.md) for how to run it.
 
-Camera stream ingest, rolling buffer, model inference, clip saving, incident database, alert API.
-Start with a dummy model so the frontend is not blocked.
+Contracts: [docs/global/architecture.md](../docs/global/architecture.md#data-contracts).

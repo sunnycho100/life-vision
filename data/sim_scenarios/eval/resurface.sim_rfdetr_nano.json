@@ -1,0 +1,41 @@
+{
+  "scenario": "resurface",
+  "detector": "/private/tmp/claude-501/-Users-sunghwan-cho-Documents-projects/f4829475-47e9-4820-8b85-1f9ed2200cb8/scratchpad/sim_rfdetr_nano.pth",
+  "frames_scored": 300,
+  "precision": 0.989,
+  "recall": 0.998,
+  "tp": 1197,
+  "fp": 13,
+  "fn": 3,
+  "recall_head_above": 0.997,
+  "recall_head_below": 1.0,
+  "boxes_head_below": 189,
+  "tracking": {
+    "0": {
+      "distinct_ids": 2,
+      "id_switches": 4,
+      "frames_matched": 296,
+      "gaps": 4
+    },
+    "1": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 300,
+      "gaps": 0
+    },
+    "2": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 300,
+      "gaps": 0
+    },
+    "3": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 300,
+      "gaps": 0
+    }
+  },
+  "ids_shown": 5,
+  "people_in_scene": 4
+}

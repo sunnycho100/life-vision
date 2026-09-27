@@ -1,0 +1,113 @@
+{
+  "name": "resurface",
+  "seconds": 10,
+  "fps": 30,
+  "shallow_depth_m": 0.9,
+  "deep_depth_m": 2.0,
+  "people": [
+    {
+      "person": 0,
+      "motion": "dive_resurface",
+      "skin": [
+        0.36,
+        0.24,
+        0.16
+      ],
+      "hair": [
+        0.75,
+        0.6,
+        0.35
+      ],
+      "suit": [
+        0.1,
+        0.3,
+        0.75
+      ],
+      "rash_guard": true,
+      "distress": 0,
+      "head_z_start": -0.051,
+      "head_z_end": -0.045,
+      "pct_frames_head_underwater": 63.0,
+      "first_underwater_s": 1.03,
+      "travel_m": 1.9
+    },
+    {
+      "person": 1,
+      "motion": "normal_swim",
+      "skin": [
+        0.91,
+        0.72,
+        0.58
+      ],
+      "hair": [
+        0.08,
+        0.06,
+        0.05
+      ],
+      "suit": [
+        0.1,
+        0.1,
+        0.12
+      ],
+      "rash_guard": false,
+      "distress": 0,
+      "head_z_start": -0.051,
+      "head_z_end": -0.064,
+      "pct_frames_head_underwater": 0.0,
+      "first_underwater_s": null,
+      "travel_m": 2.0
+    },
+    {
+      "person": 2,
+      "motion": "stand",
+      "skin": [
+        0.58,
+        0.4,
+        0.28
+      ],
+      "hair": [
+        0.45,
+        0.2,
+        0.08
+      ],
+      "suit": [
+        0.1,
+        0.3,
+        0.75
+      ],
+      "rash_guard": false,
+      "distress": 0,
+      "head_z_start": 0.58,
+      "head_z_end": 0.571,
+      "pct_frames_head_underwater": 0.0,
+      "first_underwater_s": null,
+      "travel_m": 0.03
+    },
+    {
+      "person": 3,
+      "motion": "float",
+      "skin": [
+        0.58,
+        0.4,
+        0.28
+      ],
+      "hair": [
+        0.75,
+        0.6,
+        0.35
+      ],
+      "suit": [
+        0.1,
+        0.3,
+        0.75
+      ],
+      "rash_guard": false,
+      "distress": 0,
+      "head_z_start": -0.046,
+      "head_z_end": -0.028,
+      "pct_frames_head_underwater": 0.0,
+      "first_underwater_s": null,
+      "travel_m": 0.24
+    }
+  ]
+}

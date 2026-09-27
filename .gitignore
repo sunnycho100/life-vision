@@ -28,3 +28,27 @@ dist/
 frontend/vendor/
 artifacts/
 *.webm
+.codex-build/
+
+# Isaac Sim renders
+sim/isaac/_out*/
+
+# Training runs and sim outputs too big for git
+runs/
+data/sim_scenarios/yolo/
+MUJOCO_LOG.TXT
+yolo11n.pt
+
+# Shared sim outputs (small, committed on purpose)
+!sim/simulation_videos/*.mp4
+!sim/mujoco/finetuned/*.pt
+
+# Model training data and runs
+model/_data/
+model/runs/
+data/sim_scenarios/rfdetr_ds/
+
+# Presentation assets (small, committed on purpose)
+!presentation/**/*.mp4
+data/sim_demo/
+sim/isaac/_out*.log

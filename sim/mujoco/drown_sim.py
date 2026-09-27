@@ -11,7 +11,7 @@ Water model:
     mass equals its geom volume times 1000 kg/m^3, so buoyancy factor 1 would be neutral.
   - Muscles: joint PD torques toward scripted targets, applied directly to the joints.
 
-Usage: python drown_sim.py [--seconds 20] [--fps 30] [--seed 0]
+Usage: python drown_sim.py [--seconds 20] [--fps 30] [--seed 0] [--video]
 """
 import argparse
 import json
@@ -28,6 +28,8 @@ WATER_VISCOSITY = 0.0009  # Pa*s at about 25 C
 SURFACE_Z = 0.0  # water surface height
 POOL_DEPTH = 2.0  # pool floor at z = -2
 TIMESTEP = 1 / 240
+POOL_CENTER_X = 3.0  # pool spans x -2..8, y -2.5..2.5 (swimmer heads toward +x)
+POOL_HALF = (5.0, 2.5)
 TISSUE_BUOYANCY = 0.98  # body without lung air sinks slowly
 LUNG_GEOMS = ("torso", "waist_upper")  # chest geoms that carry the lung air
 
@@ -53,6 +55,20 @@ def build_model():
                       '<geom type="capsule" fluidshape="ellipsoid" condim="1"')
     xml = xml.replace('<geom name="floor" size="0 0 .05" type="plane"',
                       f'<geom name="floor" pos="0 0 {-POOL_DEPTH}" size="0 0 .05" type="plane"')
+    # Visual-only pool: walls and a see-through water volume (no collision, no physics)
+    cx, (hx, hy), hz = POOL_CENTER_X, POOL_HALF, POOL_DEPTH / 2
+    vis = 'contype="0" conaffinity="0" group="0"'
+    pool = f"""
+    <geom name="water" type="box" pos="{cx} 0 {-hz}" size="{hx} {hy} {hz}" rgba="0.15 0.55 0.85 0.35" {vis}/>
+    <geom type="box" pos="{cx} {hy + .1} {-hz + .1}" size="{hx + .2} .1 {hz + .1}" rgba=".9 .9 .88 1" {vis}/>
+    <geom type="box" pos="{cx} {-hy - .1} {-hz + .1}" size="{hx + .2} .1 {hz + .1}" rgba=".9 .9 .88 1" {vis}/>
+    <geom type="box" pos="{cx + hx + .1} 0 {-hz + .1}" size=".1 {hy} {hz + .1}" rgba=".9 .9 .88 1" {vis}/>
+    <geom type="box" pos="{cx - hx - .1} 0 {-hz + .1}" size=".1 {hy} {hz + .1}" rgba=".9 .9 .88 1" {vis}/>
+    <light name="sun" directional="true" pos="{cx} 0 6" dir="0 0 -1" diffuse=".6 .6 .6" castshadow="false"/>
+    <camera name="cctv" pos="{cx - hx - .5} {-hy - .5} 2.5" xyaxes="1 -1 0 .45 .45 .77" fovy="55"/>"""
+    xml = xml.replace('<light name="spotlight"', pool + '\n    <light name="spotlight"', 1)
+    # the model's body-following light goes under the surface and blacks out the water
+    xml = xml.replace('<light name="top" pos="0 0 2" mode="trackcom"/>', '')
     return mujoco.MjModel.from_xml_string(xml)
 
 
@@ -68,7 +84,7 @@ def apply_buoyancy(m, d, geoms, volumes, lung_liters, lung_vol):
     """Add upward force rho*g*V*frac at each geom center, plus lung air at the chest."""
     g = -m.opt.gravity[2]
     for gid, vol in zip(geoms, volumes):
-        if m.geom(gid).name in LUNG_GEOMS:  # lung air spread over chest geoms by volume
+        if m.geom(gid).name.rsplit("/", 1)[-1] in LUNG_GEOMS:  # lung air spread over chest geoms by volume
             vol_eff = TISSUE_BUOYANCY * vol + lung_liters / 1000 * vol / lung_vol
         else:
             vol_eff = TISSUE_BUOYANCY * vol
@@ -132,7 +148,7 @@ MOTIONS = {
 }
 
 
-def run_motion(m, name, seconds, fps, seed):
+def run_motion(m, name, seconds, fps, seed, video=None):
     quat, z0, lungs, targets_fn, label, thrust = MOTIONS[name]
     rng = np.random.default_rng(seed)
     d = mujoco.MjData(m)
@@ -142,7 +158,7 @@ def run_motion(m, name, seconds, fps, seed):
 
     geoms = [g for g in range(m.ngeom) if m.geom_bodyid[g] != 0]
     volumes = [geom_volume(m, g) for g in geoms]
-    lung_vol = sum(v for g, v in zip(geoms, volumes) if m.geom(g).name in LUNG_GEOMS)
+    lung_vol = sum(v for g, v in zip(geoms, volumes) if m.geom(g).name.rsplit("/", 1)[-1] in LUNG_GEOMS)
     joint_names = [m.joint(j).name for j in range(1, m.njnt)]  # skip free root
     qadr = {n: m.joint(n).qposadr[0] for n in joint_names}
     vadr = {n: m.joint(n).dofadr[0] for n in joint_names}
@@ -169,6 +185,9 @@ def run_motion(m, name, seconds, fps, seed):
                                   d.body("torso").xpos, m.body("torso").id, d.qfrc_applied)
             mujoco.mj_step(m, d)
         kps[f] = d.xpos[body_ids]
+        if video:
+            video.update_scene(d, camera="cctv")
+            video.pipe.stdin.write(video.render().tobytes())
         under[f] = d.body("head").xpos[2] + head_r < SURFACE_Z
         if not np.isfinite(kps[f]).all():
             raise RuntimeError(f"{name}: simulation diverged at frame {f}")
@@ -176,11 +195,24 @@ def run_motion(m, name, seconds, fps, seed):
     return kps, under, label
 
 
+def open_video(m, path, fps, w=960, h=540):
+    """Offscreen renderer that streams raw frames into ffmpeg (needs ffmpeg on PATH)."""
+    import subprocess
+    path.parent.mkdir(parents=True, exist_ok=True)
+    r = mujoco.Renderer(m, height=h, width=w)
+    r.pipe = subprocess.Popen(
+        ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
+         "-r", str(fps), "-i", "-", "-pix_fmt", "yuv420p", "-vcodec", "libx264", str(path)],
+        stdin=subprocess.PIPE)
+    return r
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seconds", type=float, default=20)
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--video", action="store_true", help="also write an MP4 per motion from the cctv camera")
     args = ap.parse_args()
 
     m = build_model()
@@ -188,7 +220,10 @@ def main():
     summary = {"fps": args.fps, "seconds": args.seconds, "keypoints": KEYPOINTS, "motions": {}}
     all_kps, all_under, labels = [], [], []
     for name in MOTIONS:
-        kps, under, label = run_motion(m, name, args.seconds, args.fps, args.seed)
+        video = open_video(m, OUT_DIR / "videos" / f"{name}.mp4", args.fps) if args.video else None
+        kps, under, label = run_motion(m, name, args.seconds, args.fps, args.seed, video)
+        if video:
+            video.pipe.stdin.close(); video.pipe.wait()
         all_kps.append(kps); all_under.append(under); labels.append(label)
         head_z = kps[:, 0, 2]
         summary["motions"][name] = {

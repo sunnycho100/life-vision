@@ -4,8 +4,6 @@ Every summer, a camera watches a pool and sees nothing. A toddler slips into the
 
 LifeVision turns a pool camera people already own into a second set of eyes. It finds every person in the water, keeps an ID on each one, and raises a warning when someone goes out of sight for too long. An adult still has to respond, but the silence doesn't go unnoticed.
 
-> This is a hackathon research prototype and a supervision aid. It is not a certified lifesaving device and does not replace watching children, pool fences, or lifeguards.
-
 ## The problem we ran into first
 
 Nobody has footage of kids drowning, and we couldn't stage it. So we couldn't just download a dataset and train on it. Instead we built the hard cases ourselves:

@@ -67,7 +67,12 @@ function possiblyUnder(track) {
   const b = track.bbox_xyxy_normalized;
   return !track.visible && mappingValid() && b[3] - b[1] >= MIN_UNDER_HEIGHT && inside(boxAnchor(b), config.corners);
 }
-const TRACK_COLORS = {safe: '#3ddc84', missing: '#9aa3ab', warning: '#ffb000', alarm: '#ff4d4d'};
+// Came back after going out of sight inside the pool (same size and pool rules as possiblyUnder).
+function cameBack(track) {
+  const b = track.bbox_xyxy_normalized;
+  return track.visible && track.back_after_s != null && mappingValid() && b[3] - b[1] >= MIN_UNDER_HEIGHT && inside(boxAnchor(b), config.corners);
+}
+const TRACK_COLORS = {safe: '#3ddc84', missing: '#9aa3ab', warning: '#ffb000', alarm: '#ff4d4d', back: '#6fd3ff'};
 function draw() {
   const width = $('video-pane').clientWidth, height = $('video-pane').clientHeight, dpr = Math.min(devicePixelRatio, 2);
   if (overlay.width !== Math.round(width * dpr) || overlay.height !== Math.round(height * dpr)) {
@@ -85,13 +90,16 @@ function draw() {
     for (const track of detectionTracks) {
       const b = track.bbox_xyxy_normalized, a = point(b.slice(0, 2)), z = point(b.slice(2));
       const under = possiblyUnder(track);
-      const color = TRACK_COLORS[track.visible ? 'safe' : under ? track.level : 'missing'] ?? TRACK_COLORS.missing;
+      const back = cameBack(track);
+      const color = TRACK_COLORS[track.visible ? (back ? 'back' : 'safe') : under ? track.level : 'missing'] ?? TRACK_COLORS.missing;
       context.strokeStyle = color; context.fillStyle = color; context.lineWidth = track.visible ? 2 : 1.6;
       context.setLineDash(track.visible ? [] : [5, 4]);
       context.strokeRect(a[0], a[1], z[0] - a[0], z[1] - a[1]);
       context.setLineDash([]);
       if (!track.visible && (!under || track.level === 'safe')) continue; // dashed outline only; label once missing 1 s+ in the pool
-      const text = (track.visible ? '' : 'Person ') + track.person_id + (track.visible ? '' : ' · possibly under water ' + track.missing_s.toFixed(1) + 's');
+      const text = track.visible
+        ? track.person_id + (back ? ' · back after ' + track.back_after_s.toFixed(1) + 's' : '')
+        : 'Person ' + track.person_id + ' · possibly under water ' + track.missing_s.toFixed(1) + 's';
       context.font = '600 11px system-ui, sans-serif';
       const w = context.measureText(text).width, y = Math.max(r.y + 14, a[1] - 4);
       context.fillStyle = '#000000b0'; context.fillRect(a[0] - 2, y - 11, w + 4, 14);
@@ -289,6 +297,9 @@ function updateDisplay() {
   $('hud-alert').hidden = !alerts.length;
   $('hud-alert').className = alerts.some(tr => tr.level === 'alarm') ? 'alarm' : 'warning';
   $('hud-alert').textContent = alerts.map(tr => 'Person ' + tr.person_id + ' possibly under water ' + Math.floor(tr.missing_s) + 's').join(' · ');
+  const returns = (detectionTracks ?? []).filter(cameBack);
+  $('hud-back').hidden = !returns.length;
+  $('hud-back').textContent = returns.map(tr => 'Person ' + tr.person_id + ' back after ' + tr.back_after_s.toFixed(1) + 's').join(' · ');
   if (phase === 'twin' || phase === 'scan') $('tracking-status').textContent = observation
     ? currentDetections.length + ' person boxes · ' + (importedFrames ? 'imported observations' : tracked ? 'persistent track replay' : 'RF-DETR Nano') + (mappingValid() ? '' : ' · pool outline needs calibration')
     : 'Analysis unavailable at this time';

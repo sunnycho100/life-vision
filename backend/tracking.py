@@ -22,10 +22,14 @@ DEFAULTS = {
     "start_frames": 2,      # consecutive frames before a track gets an ID
     "lost_buffer_s": 5.0,   # ByteTrack keeps a lost track this long
     "stitch_s": 5.0,        # a new track can continue a person lost within this many seconds
-    "stitch_scale": 1.5,    # ... if it appears within this many box sizes of where they were lost
+    "stitch_scale": 3.0,    # ... if it appears within this many box sizes of where they were lost
+    "stitch_min": 0.06,     # ... or within this share of the frame, so tiny far-away people get a usable radius.
+                            # Wave pool clip: returning swimmers reappear 1.6-3 box sizes away, 0.5-4 s later.
     "resurface_speed": 0.5, # after stitch_s, a held person can still be reclaimed: the search radius grows by
                             # this many box sizes per second lost (swimmers drift), capped at resurface_max
     "resurface_max": 4.0,
+    "back_show_s": 2.0,     # after a reliable person comes back from a gap of hold_s or more, flag them this long
+    "mass_loss": 0.4,       # fewer boxes than this share of last frame's visible people (3+) = glitch frame, skipped
     "hold_s": 1.0,          # draw a lost person's last box this long as "missing" before any warning
     "warn_s": 5.0,          # missing this long: warning (yellow)
     "alarm_s": 12.0,        # missing this long: alarm (red)
@@ -94,11 +98,14 @@ class PoolTracker:
         self.person_of = {}   # tracker id -> person id
         self.people = {}      # person id -> {"box", "last_seen", "first_seen", "conf", "at_edge"}
         self.next_id = 1
+        self.events = []      # went out of sight and came back: see update()
+        self._last_visible, self._last_out = 0, []
 
     def scene_cut(self):
         """Camera cut or new shot: nobody from the old view is "missing". Forget them; IDs keep counting up."""
         self.person_of.clear(); self.people.clear()
         self.tracker.reset()
+        self._last_visible, self._last_out = 0, []
 
     def _at_edge(self, b):
         e = self.cfg["edge"]
@@ -120,7 +127,7 @@ class PoolTracker:
             # red until forget_s. Only brand-new tracks get here, so an already-tracked passer-by can't take it.
             reach = self.cfg["stitch_scale"] if lost <= self.cfg["stitch_s"] else min(
                 self.cfg["stitch_scale"] + self.cfg["resurface_speed"] * (lost - self.cfg["stitch_s"]), self.cfg["resurface_max"])
-            if d <= reach * size and (best_d is None or d < best_d):
+            if d <= max(reach * size, self.cfg["stitch_min"]) and (best_d is None or d < best_d):
                 best, best_d = pid, d
         return best
 
@@ -129,6 +136,10 @@ class PoolTracker:
         dets = [d for d in detections if (d.get("confidence") or 0) >= self.cfg["min_conf"]]
         boxes, scores = clean_boxes([d["bbox_xyxy_normalized"] for d in dets], [d["confidence"] for d in dets],
                                     self.cfg["nms_iou"], self.cfg["inside"], self.cfg["part_ratio"])
+        # Mass-loss guard (Sam's monitoring.py rule): most people vanishing in one frame is a detector or camera
+        # glitch, not a crowd going under. Skip the frame so no missing timer starts or advances.
+        if self._last_visible >= 3 and len(boxes) < self.cfg["mass_loss"] * self._last_visible:
+            return self._last_out
         tracked = self.tracker.update_with_detections(self.sv.Detections(
             xyxy=boxes.reshape(-1, 4), confidence=scores, class_id=np.zeros(len(boxes), int)))
         if len(tracked):
@@ -142,6 +153,13 @@ class PoolTracker:
                 continued = pid is not None
                 if continued:  # retire the person's old track, so it can't come back as a second copy
                     self.person_of = {k: v for k, v in self.person_of.items() if v != pid}
+                    old = self.people[pid]
+                    gap = t - old["last_seen"]
+                    if gap >= self.cfg["hold_s"] and old.get("reliable", True):
+                        # Went out of sight and came back: Sam's "person reappeared" event, visibility only.
+                        old.update(back_after=round(gap, 2), back_until=t + self.cfg["back_show_s"])
+                        self.events.append({"person_id": pid, "lost_at": round(old["last_seen"], 3), "back_at": round(t, 3),
+                                            "gone_s": round(gap, 2), "last_box": old["box"], "back_box": [float(v) for v in box]})
                 if pid is None:
                     pid, self.next_id = self.next_id, self.next_id + 1
                     self.people[pid] = {"first_seen": t}
@@ -154,7 +172,8 @@ class PoolTracker:
             p["seen"] = [s for s in p["seen"] if s > t - 2.0]
             p.pop("reliable", None)
             out.append({"person_id": pid, "bbox_xyxy_normalized": p["box"], "confidence": round(p["conf"], 3),
-                        "visible": True, "level": "safe", "missing_s": 0.0, "continued": continued})
+                        "visible": True, "level": "safe", "missing_s": 0.0, "continued": continued,
+                        "back_after_s": p["back_after"] if t <= p.get("back_until", -1) else None})
         for pid, p in list(self.people.items()):
             if pid in visible or "box" not in p:
                 continue
@@ -172,6 +191,7 @@ class PoolTracker:
                 level = "alarm" if missing >= self.cfg["alarm_s"] else "warning" if missing >= self.cfg["warn_s"] else "missing"
             out.append({"person_id": pid, "bbox_xyxy_normalized": p["box"], "confidence": round(p["conf"], 3),
                         "visible": False, "level": level, "missing_s": round(missing, 2), "continued": False})
+        self._last_visible, self._last_out = len(visible), out
         return out
 
 
@@ -213,4 +233,11 @@ if __name__ == "__main__":  # smoke check: one person lost 2 s and back nearby k
             people = tr.update(t, [{"bbox_xyxy_normalized": moved, "confidence": 0.9}])
             got |= {p["person_id"] for p in people}
     assert got == {1} and all(p["visible"] for p in people), f"resurfaced person should keep ID 1, got {sorted(got)}"
+    assert len(tr.events) == 1 and tr.events[0]["person_id"] == 1 and 7.5 <= tr.events[0]["gone_s"] <= 8.5, tr.events
+    tr = PoolTracker(5)  # mass loss: 4 people, then one frame with a single box, must not start missing timers
+    crowd = [[0.1 + 0.2 * i, 0.4, 0.16 + 0.2 * i, 0.55] for i in range(4)]
+    for f in range(20):
+        people = tr.update(f / 5, [{"bbox_xyxy_normalized": b, "confidence": 0.9} for b in crowd])
+    glitch = tr.update(4.0, [{"bbox_xyxy_normalized": crowd[0], "confidence": 0.9}])
+    assert glitch is people and all(p["visible"] for p in glitch), "one-frame mass loss should be skipped"
     print("tracking smoke check ok")

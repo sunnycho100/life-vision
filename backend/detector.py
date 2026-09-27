@@ -181,6 +181,13 @@ class TiledDetector:
                 box = [(b[0] + x) / w, (b[1] + y) / h, (b[2] + x) / w, (b[3] + y) / h]
                 (extra if i else full).append((box, float(s)))
 
+        # Weak boxes (under 0.2) are kept for low-confidence tracking but must never remove a stronger box:
+        # with a 0.1 floor they are numerous, and a real 0.7 swimmer containing two of them was dropped as a
+        # "group box" while junk full-frame boxes hid good tile detections (median people per frame 29 -> 16).
+        floor = max(threshold, .2)
+        weak = [(b, s) for b, s in full + extra if s < floor]
+        full, extra = [(b, s) for b, s in full if s >= floor], [(b, s) for b, s in extra if s >= floor]
+
         def covered(box):  # overlaps a full-frame person (e.g. half of a big swimmer cut at a tile seam)
             a = (box[2] - box[0]) * (box[3] - box[1])
             for f, _ in full:
@@ -193,5 +200,12 @@ class TiledDetector:
         # Same person seen in several overlapping tiles collapses to one box.
         boxes, scores = clean_boxes(np.clip(np.asarray([b for b, _ in pairs]).reshape(-1, 4), 0, 1),
                                     [s for _, s in pairs], nms_iou=.5, inside=.8, part_ratio=1.0)
+        strong = [b for b in boxes.tolist()]
+        for b, s in sorted(weak, key=lambda x: -x[1]):  # weak boxes only fill gaps
+            b = [min(max(v, 0.), 1.) for v in b]
+            area = (b[2] - b[0]) * (b[3] - b[1])
+            if area > 0 and all(max(0, min(b[2], o[2]) - max(b[0], o[0])) * max(0, min(b[3], o[3]) - max(b[1], o[1])) <= .3 * area
+                                for o in strong):
+                strong.append(b); scores = np.append(scores, s)
         return [{"bbox_xyxy_normalized": [float(v) for v in b], "confidence": float(s), "class_name": "person"}
-                for b, s in zip(boxes, scores) if b[2] > b[0] and b[3] > b[1]]
+                for b, s in zip(strong, scores) if b[2] > b[0] and b[3] > b[1]]

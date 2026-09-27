@@ -147,3 +147,4 @@ input[type=range]{width:100%;margin-top:10px;accent-color:var(--accent)}
 .view-presets{position:absolute;right:62px;bottom:78px;display:flex;gap:2px;padding:3px;border-radius:11px;background:var(--glass-mid);border:1px solid var(--edge-light);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
 .view-presets button{background:none;border:0;border-radius:8px;padding:7px 10px;font-size:12px;color:var(--text-mid)}
 .view-presets button:hover{background:var(--tint-hover);color:var(--text)}
+#hud-back{margin-top:6px;font-size:13px;font-weight:600;color:#6fd3ff}

@@ -106,37 +106,41 @@ def yaw_quat(deg):
     return np.array([np.cos(np.radians(deg) / 2), 0, 0, np.sin(np.radians(deg) / 2)])
 
 
-def build_scene(shallow, rng, cast):
+def build_scene(shallow, rng, cast, hq=False):
     spec = mujoco.MjSpec()
     spec.option.timestep = ds.TIMESTEP
     spec.option.density = ds.WATER_DENSITY
     spec.option.viscosity = ds.WATER_VISCOSITY
     spec.visual.global_.offwidth, spec.visual.global_.offheight = 1920, 1080
     wb = spec.worldbody
+    mats = add_hq_materials(spec) if hq else {}
     cx, (hx, hy), hz = ds.POOL_CENTER_X, ds.POOL_HALF, DEEP / 2
     BOX = mujoco.mjtGeom.mjGEOM_BOX
     tile = [0.55, 0.75, 0.85, 1]
     wb.add_geom(name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, pos=[cx, 0, -DEEP],
-                size=[hx, hy, 0.05], rgba=tile)
+                size=[hx, hy, 0.05], rgba=tile, **mats.get("tile", {}))
     x0 = cx - hx  # shallow end: a solid block raising the floor to -shallow
     wb.add_geom(name="shallow_floor", type=BOX, pos=[(x0 + SHALLOW_END_X) / 2, 0, -(shallow + DEEP) / 2],
-                size=[(SHALLOW_END_X - x0) / 2, hy, (DEEP - shallow) / 2], rgba=tile)
+                size=[(SHALLOW_END_X - x0) / 2, hy, (DEEP - shallow) / 2], rgba=tile, **mats.get("tile", {}))
     vis = dict(contype=0, conaffinity=0)
     wb.add_geom(name="water", type=BOX, pos=[cx, 0, -hz], size=[hx, hy, hz],
-                rgba=[0.15, 0.55, 0.85, 0.35], group=WATER_GROUP, **vis)
+                rgba=[0.15, 0.55, 0.85, 0.30 if hq else 0.35], group=WATER_GROUP, **mats.get("water", {}), **vis)
     wall = [0.92, 0.92, 0.9, 1]
     for pos, size in [([cx, hy + .1, -hz + .1], [hx + .2, .1, hz + .1]),
                       ([cx, -hy - .1, -hz + .1], [hx + .2, .1, hz + .1]),
                       ([cx + hx + .1, 0, -hz + .1], [.1, hy, hz + .1]),
                       ([cx - hx - .1, 0, -hz + .1], [.1, hy, hz + .1])]:
-        wb.add_geom(type=BOX, pos=pos, size=size, rgba=wall, **vis)
+        wb.add_geom(type=BOX, pos=pos, size=size, rgba=wall, **mats.get("wall", {}), **vis)
     # Walkable deck along the far long side (for the fall-in entry test)
     wb.add_geom(name="deck", type=BOX, pos=[cx, hy + 0.2 + 1.5, DECK_Z / 2], size=[hx + 0.2, 1.5, DECK_Z / 2],
-                rgba=[0.8, 0.78, 0.72, 1])
+                rgba=[0.8, 0.78, 0.72, 1], **mats.get("deck", {}))
     wb.add_geom(type=BOX, pos=[cx, 0, -0.01 - DEEP - 0.2], size=[hx + 6, hy + 6, 0.01],
-                rgba=[0.35, 0.35, 0.33, 1], **vis)  # ground below the rim
+                rgba=[0.35, 0.35, 0.33, 1], **mats.get("deck", {}), **vis)  # ground below the rim
     wb.add_light(name="sun", type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL, pos=[cx, 0, 6], dir=[0, 0, -1],
-                 diffuse=[0.7, 0.7, 0.7], castshadow=0)
+                 diffuse=[0.7, 0.7, 0.7], castshadow=int(hq))
+    if hq:  # soft fill light from the camera side, no shadow
+        wb.add_light(name="fill", type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL, pos=[cx - hx, -hy - 3, 4],
+                     dir=[0.4, 0.6, -0.7], diffuse=[0.35, 0.35, 0.38], castshadow=0)
     wb.add_camera(name="cctv", pos=[cx - hx - .5, -hy - .5, 2.5], fovy=55,
                   xyaxes=[1, -1, 0, .45, .45, .77])
 
@@ -148,20 +152,72 @@ def build_scene(shallow, rng, cast):
         skin, hair, suit = (SKIN[rng.integers(len(SKIN))], HAIR[rng.integers(len(HAIR))],
                             SUIT[rng.integers(len(SUIT))])
         rash = rng.random() < 0.4
+        if hq:  # attach prefixes names, so each person carries its own copy of the skin material
+            child.add_material(name="skin", specular=0.35, shininess=0.45)
         for g in child.geoms:
             if g.name == "floor":
                 continue
             g.fluid_ellipsoid = 1  # same ellipsoid fluid model as drown_sim
-            g.material = ""
+            g.material = "skin" if hq else ""
             color = suit if g.name in SUIT_GEOMS or (rash and g.name in TOP_GEOMS) else skin
             g.rgba = [*color, 1]
+        if hq:
+            add_body_shape(child, skin, suit, hair, rash, vis)
         # hair cap: slightly bigger sphere pushed back, face stays visible
-        child.body("head").add_geom(type=mujoco.mjtGeom.mjGEOM_SPHERE, size=[0.094, 0, 0],
-                                    pos=[-0.02, 0, 0.02], rgba=[*hair, 1], density=0, **vis)
+        if not hq:
+            child.body("head").add_geom(type=mujoco.mjtGeom.mjGEOM_SPHERE, size=[0.094, 0, 0],
+                                        pos=[-0.02, 0, 0.02], rgba=[*hair, 1], density=0, **vis)
         frame = wb.add_frame(pos=[x, y, 0], quat=yaw_quat(heading))
         frame.attach_body(child.body("torso"), f"p{i}/", "")
         looks.append({"person": i, "motion": name, "skin": skin, "hair": hair, "suit": suit, "rash_guard": rash})
     return spec.compile(), looks
+
+
+def add_hq_materials(spec):
+    """Textures and materials for the demo render. Visual only."""
+    T, B = mujoco.mjtTexture, mujoco.mjtBuiltin
+    spec.visual.quality.offsamples = 8      # anti-aliasing
+    spec.visual.quality.shadowsize = 8192
+    spec.visual.quality.numslices = spec.visual.quality.numstacks = 48  # smoother round shapes
+    spec.visual.headlight.ambient = [0.35, 0.35, 0.37]
+    spec.visual.headlight.diffuse = [0.35, 0.35, 0.35]
+    spec.add_texture(name="sky", type=T.mjTEXTURE_SKYBOX, builtin=B.mjBUILTIN_GRADIENT,
+                     rgb1=[0.62, 0.8, 0.98], rgb2=[0.25, 0.45, 0.75], width=512, height=3072)
+    spec.add_texture(name="tile", type=T.mjTEXTURE_2D, builtin=B.mjBUILTIN_CHECKER, width=256, height=256,
+                     rgb1=[0.62, 0.84, 0.95], rgb2=[0.58, 0.8, 0.92], mark=mujoco.mjtMark.mjMARK_EDGE,
+                     markrgb=[0.92, 0.97, 1.0])
+    spec.add_texture(name="stone", type=T.mjTEXTURE_2D, builtin=B.mjBUILTIN_FLAT, width=256, height=256,
+                     rgb1=[0.82, 0.79, 0.72], mark=mujoco.mjtMark.mjMARK_RANDOM, random=0.08, markrgb=[0.7, 0.67, 0.6])
+    out = {}
+    for name, tex, rep, spec_, shine, refl in [("tile", "tile", [24, 12], 0.2, 0.3, 0.0),
+                                                ("deck", "stone", [30, 30], 0.1, 0.1, 0.0),
+                                                ("wall", None, None, 0.4, 0.6, 0.0),
+                                                ("water", None, None, 0.9, 0.95, 0.0),
+                                                ("skin", None, None, 0.35, 0.45, 0.0)]:
+        m = spec.add_material(name=name, specular=spec_, shininess=shine, reflectance=refl)
+        if tex:
+            m.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = tex
+            m.texrepeat = rep
+            m.texuniform = True
+        out[name] = {"material": name}
+    # ponytail: material rgba stays white, so each geom's own rgba sets the color
+    return out
+
+
+def add_body_shape(child, skin, suit, hair, rash, vis):
+    """Visual-only shapes over the capsule skeleton: chest, belly, hips, neck, head, hair.
+    No mass, no collision, not part of buoyancy."""
+    E, C = mujoco.mjtGeom.mjGEOM_ELLIPSOID, mujoco.mjtGeom.mjGEOM_CAPSULE
+    top = suit if rash else skin
+    shapes = [("torso", E, [0.1, 0.15, 0.2], [0, 0, -0.07], top),          # chest, reaches down to the belly
+              ("torso", C, [0.045, 0.03, 0], [0, 0, 0.1], skin),            # neck
+              ("waist_lower", E, [0.095, 0.135, 0.16], [0, 0, 0.0], top),   # belly, overlaps chest and hips
+              ("pelvis", E, [0.1, 0.145, 0.11], [-0.01, 0, -0.02], suit),   # hips and swimsuit
+              ("head", E, [0.09, 0.08, 0.105], [0, 0, 0], skin),            # head, slightly oval
+              ("head", E, [0.093, 0.085, 0.1], [-0.02, 0, 0.03], hair)]     # hair
+    for body, typ, size, pos, color in shapes:
+        child.body(body).add_geom(type=typ, size=size, pos=pos, rgba=[*color, 1], material="skin",
+                                  density=0, **vis)
 
 
 def box_of(mask):
@@ -172,11 +228,11 @@ def box_of(mask):
 
 
 def run(cast, seconds, fps=30, seed=0, depth=0.9, out_dir=None, name="pool_scene",
-        video=True, gt=False, yolo_every=0, size=(960, 540)):
+        video=True, gt=False, yolo_every=0, size=(960, 540), hq=False):
     """Simulate a cast. Returns summary dict. Writes video, npz, and optionally ground truth."""
     out_dir = Path(out_dir or ds.OUT_DIR)
     rng = np.random.default_rng(seed)
-    m, looks = build_scene(depth, rng, cast)
+    m, looks = build_scene(depth, rng, cast, hq)
     d = mujoco.MjData(m)
 
     people = []

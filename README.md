@@ -14,7 +14,7 @@ Status: 12-hour hackathon build. The plan is agreed, the MuJoCo simulation works
 5. [presentation/presenter-script-team-refined.md](presentation/presenter-script-team-refined.md): timed 5:30 team script, live-demo checklist, evidence caveats, and judge Q&A
 6. [docs/presentation.md](docs/presentation.md): supporting presentation narrative and failure plan
 
-Continuing in Cursor or another coding environment? Also read [`CURSOR_HANDOFF.md`](CURSOR_HANDOFF.md).
+Continuing in Cursor or another coding environment? Also read [`docs/archive/CURSOR_HANDOFF.md`](docs/archive/CURSOR_HANDOFF.md).
 
 ## Review app
 

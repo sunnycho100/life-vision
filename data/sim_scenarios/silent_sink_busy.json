@@ -1,13 +1,13 @@
 {
-  "name": "pool_scene",
-  "seconds": 5,
+  "name": "silent_sink_busy",
+  "seconds": 10,
   "fps": 30,
   "shallow_depth_m": 0.9,
   "deep_depth_m": 2.0,
   "people": [
     {
       "person": 0,
-      "motion": "stand",
+      "motion": "silent_sink",
       "skin": [
         0.36,
         0.24,
@@ -24,12 +24,12 @@
         0.75
       ],
       "rash_guard": true,
-      "distress": 0,
-      "head_z_start": 0.58,
-      "head_z_end": 0.571,
-      "pct_frames_head_underwater": 0.0,
-      "first_underwater_s": null,
-      "travel_m": 0.02
+      "distress": 1,
+      "head_z_start": 0.043,
+      "head_z_end": -0.661,
+      "pct_frames_head_underwater": 87.3,
+      "first_underwater_s": 1.27,
+      "travel_m": 0.36
     },
     {
       "person": 1,
@@ -55,11 +55,11 @@
       "head_z_end": -0.064,
       "pct_frames_head_underwater": 0.0,
       "first_underwater_s": null,
-      "travel_m": 0.97
+      "travel_m": 2.0
     },
     {
       "person": 2,
-      "motion": "float",
+      "motion": "stand",
       "skin": [
         0.58,
         0.4,
@@ -77,15 +77,15 @@
       ],
       "rash_guard": false,
       "distress": 0,
-      "head_z_start": -0.046,
-      "head_z_end": -0.004,
+      "head_z_start": 0.58,
+      "head_z_end": 0.571,
       "pct_frames_head_underwater": 0.0,
       "first_underwater_s": null,
-      "travel_m": 0.21
+      "travel_m": 0.03
     },
     {
       "person": 3,
-      "motion": "idr",
+      "motion": "float",
       "skin": [
         0.58,
         0.4,
@@ -102,16 +102,16 @@
         0.75
       ],
       "rash_guard": false,
-      "distress": 1,
-      "head_z_start": 0.042,
-      "head_z_end": -0.005,
+      "distress": 0,
+      "head_z_start": -0.046,
+      "head_z_end": -0.028,
       "pct_frames_head_underwater": 0.0,
       "first_underwater_s": null,
-      "travel_m": 0.36
+      "travel_m": 0.24
     },
     {
       "person": 4,
-      "motion": "collapse",
+      "motion": "duck_under",
       "skin": [
         0.91,
         0.72,
@@ -128,12 +128,12 @@
         0.1
       ],
       "rash_guard": false,
-      "distress": 1,
+      "distress": 0,
       "head_z_start": 0.58,
-      "head_z_end": -0.355,
-      "pct_frames_head_underwater": 24.0,
-      "first_underwater_s": 3.8,
-      "travel_m": 0.78
+      "head_z_end": 0.39,
+      "pct_frames_head_underwater": 26.0,
+      "first_underwater_s": 2.83,
+      "travel_m": 0.45
     }
   ]
 }

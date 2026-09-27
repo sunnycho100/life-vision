@@ -26,3 +26,9 @@ dist/
 
 # Isaac Sim renders
 sim/isaac/_out*/
+
+# Training runs and sim outputs too big for git
+runs/
+data/sim_scenarios/yolo/
+MUJOCO_LOG.TXT
+yolo11n.pt

@@ -1,0 +1,13 @@
+{
+  "scenario": "resurface",
+  "detector": "gdino",
+  "frames_scored": 60,
+  "precision": 0.509,
+  "recall": 0.742,
+  "tp": 178,
+  "fp": 172,
+  "fn": 62,
+  "recall_head_above": 0.714,
+  "recall_head_below": 0.892,
+  "boxes_head_below": 37
+}

@@ -1,13 +1,13 @@
 {
-  "name": "pool_scene",
-  "seconds": 5,
+  "name": "crossing",
+  "seconds": 8,
   "fps": 30,
   "shallow_depth_m": 0.9,
   "deep_depth_m": 2.0,
   "people": [
     {
       "person": 0,
-      "motion": "stand",
+      "motion": "normal_swim",
       "skin": [
         0.36,
         0.24,
@@ -25,11 +25,11 @@
       ],
       "rash_guard": true,
       "distress": 0,
-      "head_z_start": 0.58,
-      "head_z_end": 0.571,
-      "pct_frames_head_underwater": 0.0,
-      "first_underwater_s": null,
-      "travel_m": 0.02
+      "head_z_start": -0.051,
+      "head_z_end": -0.065,
+      "pct_frames_head_underwater": 2.9,
+      "first_underwater_s": 7.23,
+      "travel_m": 1.45
     },
     {
       "person": 1,
@@ -52,14 +52,14 @@
       "rash_guard": false,
       "distress": 0,
       "head_z_start": -0.051,
-      "head_z_end": -0.064,
-      "pct_frames_head_underwater": 0.0,
-      "first_underwater_s": null,
-      "travel_m": 0.97
+      "head_z_end": -0.065,
+      "pct_frames_head_underwater": 2.9,
+      "first_underwater_s": 7.23,
+      "travel_m": 1.45
     },
     {
       "person": 2,
-      "motion": "float",
+      "motion": "stand",
       "skin": [
         0.58,
         0.4,
@@ -77,15 +77,15 @@
       ],
       "rash_guard": false,
       "distress": 0,
-      "head_z_start": -0.046,
-      "head_z_end": -0.004,
+      "head_z_start": 0.58,
+      "head_z_end": 0.571,
       "pct_frames_head_underwater": 0.0,
       "first_underwater_s": null,
-      "travel_m": 0.21
+      "travel_m": 0.03
     },
     {
       "person": 3,
-      "motion": "idr",
+      "motion": "stand",
       "skin": [
         0.58,
         0.4,
@@ -102,38 +102,12 @@
         0.75
       ],
       "rash_guard": false,
-      "distress": 1,
-      "head_z_start": 0.042,
-      "head_z_end": -0.005,
+      "distress": 0,
+      "head_z_start": 0.58,
+      "head_z_end": 0.571,
       "pct_frames_head_underwater": 0.0,
       "first_underwater_s": null,
-      "travel_m": 0.36
-    },
-    {
-      "person": 4,
-      "motion": "collapse",
-      "skin": [
-        0.91,
-        0.72,
-        0.58
-      ],
-      "hair": [
-        0.45,
-        0.2,
-        0.08
-      ],
-      "suit": [
-        0.95,
-        0.55,
-        0.1
-      ],
-      "rash_guard": false,
-      "distress": 1,
-      "head_z_start": 0.58,
-      "head_z_end": -0.355,
-      "pct_frames_head_underwater": 24.0,
-      "first_underwater_s": 3.8,
-      "travel_m": 0.78
+      "travel_m": 0.03
     }
   ]
 }

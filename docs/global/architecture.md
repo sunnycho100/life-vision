@@ -112,7 +112,7 @@ Real defaults come from MYLO (12-15 s), the ASTM F3698-24 test (20 s), and CPSC 
 - Two uses for the hackathon:
   1. Demo feed videos.
   2. A **ground-truth `tracks.json`**: the sim knows every head's height, so it can write contract A directly (projected into the camera view). Rohan can test the engine before any model works.
-- Measured: pretrained YOLO finds only 27-33% of sim people. A YOLO trained on sim frames finds 92% on a held-out scenario, so sim demos use that one.
+- Measured: pretrained YOLO finds only 12-38% of sim people. YOLO11n fine-tuned on sim frames finds 100% on a held-out scenario, so sim demos use that one (`sim/mujoco/finetuned/`).
 - Isaac Sim is out of scope (needs an RTX 4080+ on Linux or Windows).
 - Details, scenarios, and measured detector and tracker results: [simulation.md](simulation.md).
 

@@ -54,7 +54,7 @@ def make_detector(name, conf):
         model = AutoModelForZeroShotObjectDetection.from_pretrained(mid).to(dev).eval()
 
         def det(img):
-            inp = proc(images=img, text=GDINO_PROMPT, return_tensors="pt").to(dev)
+            inp = proc(images=img[..., ::-1].copy(), text=GDINO_PROMPT, return_tensors="pt").to(dev)  # cv2 BGR -> RGB
             with torch.no_grad():
                 out = model(**inp)
             r = proc.post_process_grounded_object_detection(
@@ -66,10 +66,11 @@ def make_detector(name, conf):
 
     from ultralytics import YOLO
     model = YOLO("yolo11n.pt" if name == "yolo" else name)
-    person_only = name == "yolo"
+    person_only = len(model.names) == 80  # COCO-pretrained weights: keep class 0 "person" only
 
     def det(img):
-        r = model.predict(img[..., ::-1], imgsz=960, conf=conf, classes=[0] if person_only else None, verbose=False)[0]
+        r = model.predict(img, imgsz=960,  # ultralytics expects cv2 BGR as-is
+                           conf=conf, classes=[0] if person_only else None, verbose=False)[0]
         return r.boxes.xyxy.cpu().numpy(), r.boxes.conf.cpu().numpy()
     return det
 
@@ -82,6 +83,7 @@ def main():
     ap.add_argument("--every", type=int, default=1, help="score every Nth frame (tracking forces 1)")
     ap.add_argument("--track", action="store_true", help="run ByteTrack and count ID switches")
     ap.add_argument("--video", action="store_true", help="write an annotated MP4 (needs --track)")
+    ap.add_argument("--no-gt", action="store_true", help="leave the white ground-truth boxes out of the MP4")
     args = ap.parse_args()
     every = 1 if args.track else args.every
 
@@ -101,7 +103,7 @@ def main():
         w, h = gt["width"], gt["height"]
         writer = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24",
                                    "-s", f"{w}x{h}", "-r", str(gt["fps"]), "-i", "-", "-pix_fmt", "yuv420p",
-                                   "-vcodec", "libx264", str(out_dir / f"{args.scenario}.{tag}.mp4")],
+                                   "-vcodec", "libx264", str(out_dir / f"{args.scenario}.{tag}{'.nogt' if args.no_gt else ''}.mp4")],
                                   stdin=subprocess.PIPE)
 
     tp = fp = fn = 0
@@ -136,7 +138,7 @@ def main():
                  "head": "unknown", "head_conf": 0.0, "head_bbox": None, "keypoints": None}
                 for b, tid, c in zip(t_boxes, tr.tracker_id, tr.confidence)]})
             if writer:
-                for b in g_boxes:
+                for b in ([] if args.no_gt else g_boxes):
                     cv2.rectangle(img, b[:2], b[2:], (255, 255, 255), 1)
                 for b, tid in zip(t_boxes, tr.tracker_id):
                     b = [int(v) for v in b]

@@ -32,17 +32,19 @@ Scored against the simulator's boxes (IoU 0.5). Test scenario `resurface` was ne
 
 | Detector | Scenario | Precision | Recall | Recall, head above | Recall, head fully under |
 |---|---|---|---|---|---|
-| Pretrained YOLO11n (COCO person) | baseline | 0.99 | 0.33 | 0.36 | 0.00 |
-| Pretrained YOLO11n (COCO person) | resurface | 1.00 | 0.27 | 0.31 | 0.07 |
-| Grounding DINO tiny (prompt: person, mannequin, humanoid robot), every 5th frame | resurface | 0.51 | 0.74 | 0.71 | 0.89 |
-| **YOLO11n trained on sim frames only** (180 frames, 30 epochs, about 10 min on a MacBook) | resurface (held out) | 0.76 | **0.92** | 0.90 | **0.98** |
-| YOLO11n trained on sim frames only | baseline (seen in training) | 0.99 | 1.00 | 1.00 | 1.00 |
+| Pretrained YOLO11n (COCO person) | baseline | 1.00 | 0.30 | 0.33 | 0.00 |
+| Pretrained YOLO11n (COCO person) | resurface | 1.00 | 0.25 | 0.30 | 0.02 |
+| Pretrained YOLOv8n (COCO person) | baseline | 0.99 | 0.38 | 0.41 | 0.02 |
+| Pretrained YOLOv8n (COCO person) | resurface | 0.94 | 0.12 | 0.09 | 0.31 |
+| Grounding DINO tiny (prompt: person, mannequin, humanoid robot), every 5th frame | resurface | 0.52 | 0.72 | 0.69 | 0.89 |
+| **YOLO11n fine-tuned on sim frames** (180 frames, 30 epochs, about 7 min on a MacBook) | resurface (held out) | **1.00** | **1.00** | 1.00 | 1.00 |
+| YOLO11n fine-tuned on sim frames | baseline (seen in training) | 1.00 | 1.00 | 1.00 | 1.00 |
 
 What this says:
-- **Pretrained YOLO mostly fails on the sim.** It sees the standing capsule people but not the swimmers and floaters, and never someone fully under. Capsule bodies in tinted water are too far from COCO photos.
+- **Pretrained YOLO (v8n or 11n) mostly fails on the sim.** It sees the standing capsule people but not the swimmers and floaters, and almost never someone fully under. Capsule bodies in tinted water are too far from COCO photos.
 - **Grounding DINO** finds more, but half its boxes are wrong. Offline labeling at most.
-- **A detector trained on sim frames works on sim.** Labels come free from the simulator. This is the detector to use for the sim demo feeds and engine tests. Its lower precision comes from extra boxes around partly hidden bodies.
-- Earlier numbers (96% precision, 83% recall for pretrained YOLO) were measured on renders where the water was accidentally not drawn. They are wrong and replaced by the table above.
+- **A detector fine-tuned on sim frames is perfect on sim**, including a scenario it never saw. Labels come free from the simulator. Perfect on sim only means it learned our capsule bodies, not that it will work on anything else. Use it for sim demo feeds and engine tests.
+- Corrections: earlier numbers in this repo's history (96% and 83% for pretrained YOLO, 76% and 92% for the fine-tuned one) were wrong. The first came from renders where the water was accidentally not drawn, the second from a script bug that fed the models color-swapped frames. Both are fixed, and the table above is re-measured.
 
 ## Tracking results
 
@@ -50,12 +52,13 @@ ByteTrack (`supervision`) on the held-out `resurface` scenario:
 
 | Detector | Person | Frames tracked | Distinct IDs | ID switches |
 |---|---|---|---|---|
-| Sim-trained YOLO | diver (goes under and resurfaces) | 294 / 300 | 1 | 0 |
-| Sim-trained YOLO | swimmer | 285 / 300 | 1 | 0 |
-| Sim-trained YOLO | stander | 300 / 300 | 1 | 0 |
-| Sim-trained YOLO | floater | 200 / 300 | 1 | 0 |
-| Pretrained YOLO | diver | 14 / 300 | 2 | 1 |
-| Pretrained YOLO | stander | 299 / 300 | 1 | 0 |
+| Fine-tuned YOLO11n | diver (goes under and resurfaces) | 299 / 300 | 1 | 0 |
+| Fine-tuned YOLO11n | swimmer | 300 / 300 | 1 | 0 |
+| Fine-tuned YOLO11n | stander | 300 / 300 | 1 | 0 |
+| Fine-tuned YOLO11n | floater | 300 / 300 | 1 | 0 |
+| Pretrained YOLOv8n | diver | 49 / 300 | 4 | 3 |
+| Pretrained YOLOv8n | stander | 70 / 300 | 2 | 1 |
+| Pretrained YOLO11n | stander | 298 / 300 | 1 | 0 |
 
 The sim-trained detector keeps the diver's box through the whole dive, because in clear water the body stays visible. So the box never disappears and a "person missing" timer would never start. This is the clear-water problem from the decisions, shown on real numbers: **the alarm must use head state, not disappearance.**
 

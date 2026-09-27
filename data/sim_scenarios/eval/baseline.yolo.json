@@ -2,12 +2,12 @@
   "scenario": "baseline",
   "detector": "yolo",
   "frames_scored": 180,
-  "precision": 0.993,
-  "recall": 0.333,
-  "tp": 300,
-  "fp": 2,
-  "fn": 600,
-  "recall_head_above": 0.36,
+  "precision": 1.0,
+  "recall": 0.304,
+  "tp": 274,
+  "fp": 0,
+  "fn": 626,
+  "recall_head_above": 0.329,
   "recall_head_below": 0.0,
   "boxes_head_below": 66
 }

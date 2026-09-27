@@ -1,0 +1,25 @@
+{
+  "scenario": "resurface",
+  "detector": "yolov8n.pt",
+  "frames_scored": 300,
+  "precision": 0.943,
+  "recall": 0.124,
+  "tp": 149,
+  "fp": 9,
+  "fn": 1051,
+  "recall_head_above": 0.09,
+  "recall_head_below": 0.307,
+  "boxes_head_below": 189,
+  "tracking": {
+    "0": {
+      "distinct_ids": 4,
+      "id_switches": 3,
+      "frames_matched": 49
+    },
+    "2": {
+      "distinct_ids": 2,
+      "id_switches": 1,
+      "frames_matched": 70
+    }
+  }
+}

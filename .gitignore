@@ -40,3 +40,4 @@ yolo11n.pt
 # Model training data and runs
 model/_data/
 model/runs/
+data/sim_scenarios/rfdetr_ds/

@@ -1,0 +1,13 @@
+{
+  "scenario": "baseline",
+  "detector": "rfdetr",
+  "frames_scored": 180,
+  "precision": 0.83,
+  "recall": 0.911,
+  "tp": 820,
+  "fp": 168,
+  "fn": 80,
+  "recall_head_above": 0.924,
+  "recall_head_below": 0.742,
+  "boxes_head_below": 66
+}

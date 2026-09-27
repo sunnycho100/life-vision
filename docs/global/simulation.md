@@ -70,6 +70,32 @@ The sim-trained detector keeps the diver's box through the whole dive, because i
 ```
 Tracking also writes `data/sim_scenarios/eval/<scenario>.<detector>.tracks.json` (contract A, head `unknown`), which the event engine can read directly.
 
+## RF-DETR-N and tracking edge logic
+
+Stock RF-DETR-N (Apache 2.0, runs locally) sees the capsule people far better than stock YOLO, but with the default tracker it showed 18 IDs for 4 people: boxes flicker, head-only duplicate boxes get their own IDs, and every re-detection starts a new ID.
+
+Edge logic (`--edge` in `sim/eval_detectors.py`):
+1. Drop a box that sits mostly (70%) inside a bigger box (head-only or body-part duplicates).
+2. ByteTrack needs 3 consecutive frames to start an ID and keeps lost people 5 s.
+3. ID stitching: a new track within 3 box-diagonals of where someone was lost, within 5 s, gets their old ID.
+4. A lost person's last box is held for 1 s (the "missing" state).
+
+Held-out `resurface`, 4 real people:
+
+| Setup | Precision | Recall | Recall, fully under | IDs shown | ID switches |
+|---|---|---|---|---|---|
+| Stock RF-DETR-N + default ByteTrack | 0.81 | 0.79 | 0.60 | 18 | 3 |
+| Stock RF-DETR-N + edge logic | 0.86 | 0.79 | 0.60 | 5 | 1 |
+| RF-DETR-N fine-tuned on sim (1 epoch) + default ByteTrack | 0.99 | 1.00 | 1.00 | 5 | 4 |
+| **RF-DETR-N fine-tuned on sim (1 epoch) + edge logic** | **1.00** | **1.00** | **1.00** | **4** | **0** |
+
+```bash
+.venv/bin/pip install "rfdetr[train]"
+.venv/bin/python sim/train_sim_rfdetr.py --epochs 1          # held-out val hit P 1.0 / R 1.0 after 1 epoch (about 2 min)
+.venv/bin/python sim/eval_detectors.py --scenario resurface --detector runs/sim_rfdetr/checkpoint_best_ema.pth --track --edge --video
+```
+The fine-tuned checkpoint is 121 MB, too big for git; regenerate it with the script.
+
 ## How the sim helps with real footage
 
 A detector trained on capsule people will not work on real people, and the reverse is also true (pretrained YOLO above). The sim is not training data for the real detector. What it gives us:

@@ -99,7 +99,7 @@ Two fixes in `detect_drowning.py` got the false alerts to zero on this clip: cla
 
 ## RF-DETR-S fine-tuned on real wave-pool footage (Joanne)
 
-`finetune_rfdetr_s_colab.ipynb` fine-tunes COCO-pretrained RF-DETR-S on `data/aquaperson_wavepool_v1` (80 YouTube wave-pool frames, one box per visible person, submerged parts not boxed). The notebook is saved with its outputs from the Colab run.
+`finetune_rfdetr_s_colab.zip` holds `finetune_rfdetr_s_colab.ipynb` (unzip it to open in Jupyter or Colab). It fine-tunes COCO-pretrained RF-DETR-S on `data/aquaperson_wavepool_v1` (80 YouTube wave-pool frames, one box per visible person, submerged parts not boxed). The notebook is saved with its outputs from the Colab run.
 
 - Split: 62 train / 16 valid frames (valid = `NycwxaU4GPw_065` to `_080`, 680 person boxes)
 - rfdetr 1.11.0, single class `person`, training scale 672, early stopped with best EMA mAP at epoch 25

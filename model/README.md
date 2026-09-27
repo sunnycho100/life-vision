@@ -4,14 +4,9 @@
 - `pose/` (Sam, samkwak188): optional YOLO-Pose features for the yellow "distress" state.
 - `eval/` (Sam): metrics script, time to alarm, false alarms per hour, missed events.
 
-<<<<<<< Updated upstream
 See [docs/global/architecture.md](../docs/global/architecture.md).
-=======
-- Person detector and MOT tracker (model choice TBD, see docs/technical-summary.md)
-- Fine-tuning on our own pool footage (upper body only)
-- Evaluation: detection delay, false alarms per hour, sim vs real ablation
 
-## Sim-trained baseline: YOLO11n + ByteTrack + underwater timer
+## Isaac Sim baseline (Rohan): YOLO11n + ByteTrack + underwater timer
 
 | File | What |
 |---|---|
@@ -30,4 +25,3 @@ model\.venv\Scripts\python.exe model\detect_drowning.py --video sim\isaac\_out_t
 Setup: a Python 3.12 venv in `model/.venv` with `torch` (CUDA 12.8 build), `ultralytics`, `lap` and `imageio-ffmpeg`.
 
 **Caveat:** train and test are both synthetic, from the same scene and characters. A good score here shows the pipeline works end to end. It says nothing yet about real pools. Test on real footage next.
->>>>>>> Stashed changes

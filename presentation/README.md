@@ -25,6 +25,9 @@ Name files by what they show, e.g. `before_stock_rfdetr_default_tracker.mp4`, no
 | `images/isaac_sim_pool_editor.png` | Isaac Sim 6.1 editor with the backyard pool scene: 5 animated people, water volume, stage tree | screenshot of `sim/isaac/pool_scene.py` + `pool_anim.py` running live in the Isaac Sim window (RTX Real-Time) |
 | `videos/demo_hq_10s.mp4` | 10 s higher-quality sim render (720p, shadows, textures, body shapes): stand, swim, duck under, collapse, float, drowning response | `sim/mujoco/demo.py` |
 | `technical-story.md` | Full technical story: pipeline diagram, models tried, YOLO vs RF-DETR, fine-tuning, tracking, decisions, mistakes caught | written from the measured results |
+| `slides/pool-assistant-draft.pptx` | Draft 10-slide deck, black and white SpaceX-style, speaker notes included, slide 8 is a demo placeholder | `npm install pptxgenjs && node presentation/slides/build_deck.js` |
+| `slides/slide-context.md` | Per-slide content, visuals, speaker notes, timing, presenter split | written from the technical story |
+| `videos/demo_hq_tracking_finetuned_rfdetr.mp4` | Fine-tuned RF-DETR-N + tracking on the HQ demo render (slide 8 fallback) | `sim/eval_detectors.py --scenario demo_hq --detector <sim_rfdetr checkpoint> --track --edge --video --no-gt` |
 | `data/sim_results.csv` | Detector and tracker results on the held-out sim scenario | [docs/global/simulation.md](../docs/global/simulation.md) |
 
 ## Rules for slides

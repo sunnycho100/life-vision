@@ -1,0 +1,2 @@
+file '/Users/sunghwan_cho/Documents/projects/we-fall-we-die/data/veo_footage/tmp_var_2/part1.mp4'
+file '/Users/sunghwan_cho/Documents/projects/we-fall-we-die/data/veo_footage/tmp_var_2/part2.mp4'

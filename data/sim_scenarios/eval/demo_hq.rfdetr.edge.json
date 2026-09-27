@@ -1,0 +1,53 @@
+{
+  "scenario": "demo_hq",
+  "detector": "rfdetr",
+  "frames_scored": 300,
+  "precision": 0.884,
+  "recall": 0.759,
+  "tp": 1366,
+  "fp": 180,
+  "fn": 434,
+  "recall_head_above": 0.833,
+  "recall_head_below": 0.338,
+  "boxes_head_below": 269,
+  "tracking": {
+    "0": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 298,
+      "gaps": 0
+    },
+    "1": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 231,
+      "gaps": 28
+    },
+    "2": {
+      "distinct_ids": 2,
+      "id_switches": 2,
+      "frames_matched": 147,
+      "gaps": 9
+    },
+    "3": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 179,
+      "gaps": 18
+    },
+    "4": {
+      "distinct_ids": 2,
+      "id_switches": 2,
+      "frames_matched": 276,
+      "gaps": 11
+    },
+    "5": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 161,
+      "gaps": 11
+    }
+  },
+  "ids_shown": 6,
+  "people_in_scene": 6
+}

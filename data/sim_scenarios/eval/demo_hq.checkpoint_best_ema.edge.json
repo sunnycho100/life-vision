@@ -1,0 +1,53 @@
+{
+  "scenario": "demo_hq",
+  "detector": "runs/sim_rfdetr/checkpoint_best_ema.pth",
+  "frames_scored": 300,
+  "precision": 0.998,
+  "recall": 0.929,
+  "tp": 1672,
+  "fp": 3,
+  "fn": 128,
+  "recall_head_above": 0.967,
+  "recall_head_below": 0.71,
+  "boxes_head_below": 269,
+  "tracking": {
+    "0": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 298,
+      "gaps": 0
+    },
+    "1": {
+      "distinct_ids": 2,
+      "id_switches": 8,
+      "frames_matched": 296,
+      "gaps": 2
+    },
+    "2": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 169,
+      "gaps": 9
+    },
+    "3": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 298,
+      "gaps": 0
+    },
+    "4": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 298,
+      "gaps": 0
+    },
+    "5": {
+      "distinct_ids": 1,
+      "id_switches": 0,
+      "frames_matched": 298,
+      "gaps": 0
+    }
+  },
+  "ids_shown": 6,
+  "people_in_scene": 6
+}

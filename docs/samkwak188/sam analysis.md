@@ -335,11 +335,59 @@ Report person misses by visibility, distance, and other relevant conditions, alo
 
 Select the YOLO implementation and model size after measuring quality and runtime on the available hardware. Check the selected code and weights' licenses before redistribution or deployment. This section proposes an experiment plan; no YOLO training or benchmark has been performed in this repository.
 
-## 14. Review provenance
+## 14. Candidate models: person detection and upper-body pose
+
+The team is considering pose estimation in addition to person detection because swimmers may expose only their head, shoulders, and arms. Pose estimation locates anatomical landmarks; the connected skeleton is a visualization of those predictions. It is different from ordinary bounding-box detection and does not itself classify submersion or drowning.
+
+### Shortlist and proposed roles
+
+| Candidate | Output / role | Why consider it | Main limitation | Priority |
+|---|---|---|---|---|
+| YOLO person detector | Person boxes and detection confidence | Establishes the simplest baseline and supports the image-training plan in Section 13. | Boxes do not establish airway position or underwater status. | Build first. |
+| YOLO Pose | Person detections and the standard 17 COCO body keypoints | Fits the proposed YOLO workflow; exposes head, shoulder, elbow, and wrist information for temporal analysis. | Small or occluded swimmers may have unreliable keypoints; missing lower bodies must not disqualify a person. | First pose experiment. |
+| MediaPipe Pose Landmarker | 33 body landmarks, including facial points and upper-body joints | An alternative to compare on sufficiently visible swimmers; offers a different landmark set. | More landmarks do not necessarily mean better pool performance. Multi-person coverage and identity association need explicit configuration and evaluation. | Comparison experiment. |
+| SAM 3D Body | Estimated 3D human mesh and pose | Potential later experiment if 3D features provide measurable task value. | Hidden-body reconstruction is an estimate, not a measurement under water; added cost is unproven here. | Defer, as discussed in Section 4. |
+
+Documented landmark definitions: [Ultralytics pose estimation](https://docs.ultralytics.com/tasks/pose/) and [Google MediaPipe Pose Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker). These sources establish capabilities, not performance on this project's pool footage. No exact model version, checkpoint, input size, or runtime configuration has been selected yet.
+
+### What upper-body pose might contribute
+
+Useful candidate signals include visible head movement, shoulder orientation, and elbow/wrist motion over time. These are hypotheses to test against normal swimming, floating, splashing, and partial occlusion. A single posture cannot reliably distinguish ordinary play from distress.
+
+The 17-keypoint YOLO layout includes nose, eyes, ears, shoulders, elbows, and wrists, as well as lower-body points. MediaPipe's 33-landmark layout additionally includes mouth and hand landmarks. Neither output directly labels a water surface or proves that a swimmer can breathe.
+
+Partial visibility is a reason to investigate upper-body features, but also a source of model failure. A rendered skeleton may include inferred hidden joints. Do not use an estimated knee, hip, or other obscured point as observed evidence. Use the selected model's confidence/visibility information, validate its behavior on pool footage, and retain an explicit missing/unknown state.
+
+**A complete skeleton must not be required to keep a person tracked or an incident open.** A head-only swimmer remains relevant. Missing or low-confidence landmarks should not automatically clear an alert or turn an uncertain observation into confirmed submersion.
+
+### LinkedIn example: what is and is not established
+
+The user shared [Sean Aminov's SafetyLens post](https://www.linkedin.com/feed/update/urn:li:activity:7507868872797151232/), describing a workplace fall-detection and incident-response demonstration. The author reports a first-place hackathon result and describes live video and pose tracking. The post includes a MediaPipe hashtag, suggesting MediaPipe involvement, but does not establish the exact model, checkpoint, or architecture.
+
+The public post text was accessible during this review. The video download returned HTTP 403, so its joint overlay and behavior were not independently inspected. Do not describe the project as a verified YOLO or MediaPipe implementation based only on the visual style reported by the user or the hashtag. Workplace fall performance also does not establish performance on partially submerged swimmers.
+
+### Controlled comparison before choosing
+
+1. Select representative prerecorded pool clips and keep the development/test split by session. Include head-only views, visible upper bodies, distant swimmers, splashes, and overlapping people.
+2. Run the person-detection baseline and YOLO Pose on exactly the same clips. Compare MediaPipe on the same material if time permits.
+3. Manually annotate a small subset of visible upper-body landmarks and mark uncertain/unobservable points explicitly. Bounding boxes and baby/adult labels alone are not sufficient supervision for fine-tuning a pose model.
+4. Measure person recall, visible-landmark accuracy and availability, temporal stability, identity changes, and end-to-end latency on the actual hardware. Break results down by visibility and distance; an attractive overlay is not an evaluation metric.
+5. Add pose-derived features to the existing event engine and compare event recall, false alerts per hour, and alert delay against the baseline. Keep footage, threshold-selection procedure, and test cases comparable.
+6. Keep pose in the main pipeline only if it improves relevant outcomes at an acceptable runtime cost. Otherwise retain it as an optional visualization or continue with detection/tracking while improving data and camera placement.
+
+For a temporal model, preserve missing-keypoint masks alongside coordinates and confidence; do not encode an unavailable joint as a real point at image coordinate zero. Keep tracking identity separate from pose output and preserve unresolved incidents during pose failures.
+
+### Recommended decision today
+
+Use a **YOLO person-detection baseline plus a separate YOLO Pose experiment**, with MediaPipe as the alternative comparison. Begin with pretrained models before deciding whether custom pose annotation and fine-tuning are worth the effort. Keep age classification optional and keep the explicit head-state/visibility and event logic: pose complements those signals rather than replacing them.
+
+This is a shortlist, not a benchmark result. Pin the chosen package/checkpoint versions and check their applicable licenses when implementation begins. The existing recommendations about offline 2D SAM annotation and deferred 3D reconstruction remain unchanged.
+
+## 15. Review provenance
 
 This document distinguishes repository observations, externally documented capabilities, and proposed engineering choices. No benchmark, clinical validation, certification, or real-world safety claim is implied. External source links were checked during the review; implementation-specific results remain to be collected.
 
-Section 13 was added after the independent Claude review below, following the team's proposed YOLO direction. It was not part of that Claude review.
+Sections 13 and 14 were added after the independent Claude review below, following the team's proposed YOLO direction and interest in upper-body pose estimation. They were not part of that Claude review.
 
 ### Independent Claude review and disposition
 

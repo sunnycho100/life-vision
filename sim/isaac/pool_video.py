@@ -2,17 +2,19 @@
 
 Tested on Isaac Sim 6.1 (pip install), Windows 11, RTX 4070 Laptop 8 GB.
 
-Five people follow scripted paths that match the MuJoCo motions in sim/mujoco:
-  swimmer   laps along the pool, lying flat, face dipping (never "below" for long)
-  treader   treads water in place, head above the surface
-  diver     ducks under for about 4 s twice (should give a WARNING, not an ALARM)
-  sinker    silent sink: goes under at 3 s, ends motionless on the bottom (ALARM case)
-  struggler instinctive drowning response: head bobs in and out, then sinks at 12 s
+Six people, 20 s, chosen to show the cases a pool monitor has to tell apart:
+  swimmer    front-crawl laps along the near side, body roll, smooth turns at the walls
+  floater    floats on their back, face up, drifting (normal, never an alarm)
+  treader    treads water and looks around (normal)
+  diver      duck-dives at 3.6 s, swims about 1.8 m under water, resurfaces elsewhere at 7.6 s,
+             then a short duck at 13 s (under about 3.5 s and 2 s: should not alarm)
+  child      child-sized; dog-paddles, weakens silently, slips under at about 5 s and ends
+             motionless on the bottom (the toddler case: ALARM)
+  struggler  instinctive drowning response for 9 s, then goes limp and sinks (ALARM)
 
-Arms, hands, legs, spine and head are animated procedurally (pool_anim.py): front crawl,
-sculling and eggbeater kick, streamline dive, the arm-pressing drowning response, and a
-limp float. Every frame still gets exact labels, including how long
-each head has been underwater, which is what the drowning timer needs to be tested on.
+Arms, hands, legs, spine and head are animated procedurally (pool_anim.py), and the water
+surface moves every frame (pool_scene.WaterSurface): ambient waves plus rings from each person.
+Every frame gets exact labels, including how long each head has been underwater.
 
 --seed 0 is the fixed demo layout. Other seeds shift positions, headings, timing, which
 character plays which role, the sky and the camera, for training data that doesn't
@@ -20,7 +22,7 @@ repeat the test clip. --random re-poses everyone at random every frame (stills).
 
 Run from the repo root (see sim/isaac/README.md):
     set OMNI_KIT_ACCEPT_EULA=YES
-    sim\\isaac\\.venv\\Scripts\\python.exe sim\\isaac\\pool_video.py --seconds 20 --pathtrace 32 --subframes 1
+    sim\\isaac\\.venv\\Scripts\\python.exe sim\\isaac\\pool_video.py --seconds 20 --fps 30 --pathtrace 64 --subframes 1
 Output in --out:
     pool.mp4             the clean video (what the model sees)
     pool_labeled.mp4     same video with true boxes, head state and underwater timers drawn in
@@ -39,7 +41,8 @@ import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seconds", type=float, default=20)
-parser.add_argument("--fps", type=int, default=15)
+parser.add_argument("--start", type=float, default=0.0, help="start time in the scenario, for quick checks")
+parser.add_argument("--fps", type=int, default=30)
 parser.add_argument("--width", type=int, default=1920, help="multiple of 16 for H.264")
 parser.add_argument("--height", type=int, default=1088, help="multiple of 16 for H.264")
 parser.add_argument("--out", default="sim/isaac/_out_video")
@@ -91,62 +94,118 @@ def smooth(a, b, t0, t1, t):
     return a + (b - a) * (3 * u * u - 2 * u * u * u)
 
 
-BOTTOM = -POOL_D + 0.2  # eye height of someone lying on the pool floor
+def bump(t0, t1, t):
+    """0 -> 1 -> 0 over [t0, t1] (half a sine)."""
+    return math.sin(math.pi * (t - t0) / (t1 - t0)) if t0 < t < t1 else 0.0
+
+
+BOTTOM = -POOL_D + 0.2  # head-center height of an adult lying on the pool floor
+wob = anim.wobble
+
+# Each role returns: x, y (hip), head (head-center height), yaw, tilt, roll, pose, ripple amplitude (m).
 
 
 def swimmer(t):
-    span, speed = POOL_L - 2.5, 0.6
-    d = (t * speed) % (2 * span)
-    forward = d < span
-    x = -span / 2 + (d if forward else 2 * span - d)
-    head = -0.03 + 0.05 * math.sin(2 * math.pi * 1.1 * t)  # face in the water, lifting to breathe
-    return x, -1.1, head, (0 if forward else 180), 85, anim.freestyle(t)
+    """Front crawl along the near side. Speed eases down into each wall, the swimmer turns
+    toward the middle of the pool while lifting the head, then pushes off."""
+    x0, x1, y, v, turn = -2.8, 2.8, -1.35, 0.65, 1.8
+    lap = (x1 - x0) / v
+    u = (t + 1.0) % (2 * (lap + turn))  # start 1 s into the first lap
+
+    def along(p):  # slower near the walls, faster mid-pool
+        return p - 0.5 * math.sin(2 * math.pi * p) / (2 * math.pi)
+    turning, s = 0.0, 0.0
+    if u < lap:
+        x, yaw = x0 + (x1 - x0) * along(u / lap), 0.0
+    elif u < lap + turn:
+        s = (u - lap) / turn
+        x, yaw, turning = x1 + 0.15 * math.sin(math.pi * s), smooth(0, 180, 0, 1, s), math.sin(math.pi * s)
+    elif u < 2 * lap + turn:
+        x, yaw = x1 - (x1 - x0) * along((u - lap - turn) / lap), 180.0
+    else:
+        s = (u - 2 * lap - turn) / turn
+        x, yaw, turning = x0 - 0.15 * math.sin(math.pi * s), smooth(180, 0, 0, 1, s), math.sin(math.pi * s)
+    head = -0.05 + 0.025 * math.sin(2 * math.pi * 1.1 * t) + 0.08 * turning  # face in the water
+    pose = anim.blend(anim.freestyle(t, 1), anim.tread(t, 1), 0.8 * turning)
+    return (x, y + 0.03 * wob(t, 1, 0.3), head, yaw, 85 - 25 * turning, anim.freestyle_roll(t) * (1 - turning),
+            pose, 0.012)
+
+
+def floater(t):
+    x, y = 1.9 + 0.15 * math.sin(0.25 * t), 0.35 + 0.1 * math.sin(0.19 * t + 1)
+    head = -0.03 + 0.012 * math.sin(2 * math.pi * 0.25 * t)  # face out, back of the head in the water
+    return x, y, head, 10 + 12 * math.sin(0.13 * t), -82, 5 * math.sin(0.4 * t), anim.backfloat(t, 2), 0.003
 
 
 def treader(t):
-    head = 0.12 + 0.04 * math.sin(2 * math.pi * 0.9 * t)
-    return 2.6 + 0.1 * math.sin(0.3 * t), 1.1, head, 200 + 10 * math.sin(0.4 * t), 8, anim.tread(t)
+    head = 0.13 + 0.035 * math.sin(2 * math.pi * 0.9 * t + 0.4 * wob(t, 4, 0.3))
+    return (2.8 + 0.08 * math.sin(0.3 * t), 1.25 + 0.06 * math.sin(0.23 * t), head, 205 + 25 * wob(t, 4, 0.1),
+            8 + 3 * wob(t, 5, 0.2), 0.0, anim.tread(t, 4), 0.008)
 
 
 def diver(t):
-    head, tilt, w = 0.12, 8, 0.0
-    for s in (4.0, 13.0):  # two dives, about 4 s under each
-        if s - 0.6 <= t < s + 4:
-            w = min(1.0, (t - s + 0.6) / 0.6)
-            head, tilt = smooth(0.12, -0.8, s, s + 0.8, t), smooth(8, 70, s, s + 0.8, t)
-        elif s + 4 <= t < s + 4.8:
-            w = 1 - (t - s - 4) / 0.8
-            head, tilt = smooth(-0.8, 0.12, s + 4, s + 4.8, t), smooth(70, 8, s + 4, s + 4.8, t)
-    return -1.2 + 0.3 * math.sin(0.2 * t), 1.2, head, 30, tilt, anim.blend(anim.tread(t), anim.streamline(t), w)
+    ax, ay, bx, by = -1.0, 1.3, 0.8, 1.15
+    tread, down, glide = anim.tread(t, 3), anim.streamline(t), anim.underwater_swim(t)
+    ripple = 0.008 + 0.03 * math.exp(-max(t - 3.9, 0) / 0.6) * (t > 3.6) + 0.02 * math.exp(-max(t - 7.3, 0) / 0.6) * (t > 7.0)
+    if t < 3.6:  # treading at A
+        return ax, ay, 0.12, 0.0, 8, 0.0, tread, 0.008
+    if t < 4.2:  # duck dive, head first
+        return (ax + 0.2 * smooth(0, 1, 3.6, 4.2, t), ay, smooth(0.12, -0.65, 3.6, 4.2, t), 0.0,
+                smooth(8, 95, 3.6, 4.2, t), 0.0, anim.blend(tread, down, smooth(0, 1, 3.6, 3.9, t)), ripple)
+    if t < 7.0:  # swim under water from A to B
+        p = smooth(0, 1, 4.2, 7.0, t)
+        yaw = math.degrees(math.atan2(by - ay, bx - ax - 0.2))
+        return (ax + 0.2 + (bx - ax - 0.2) * p, ay + (by - ay) * p, -0.75 + 0.05 * math.sin(3 * t),
+                yaw * smooth(0, 1, 4.2, 4.8, t), smooth(95, 82, 4.2, 5.0, t), 0.0,
+                anim.blend(down, glide, smooth(0, 1, 4.2, 4.8, t)), ripple)
+    yaw = math.degrees(math.atan2(by - ay, bx - ax - 0.2))
+    bob = 0.02 * math.sin(2 * math.pi * 0.9 * t)
+    if t < 7.6:  # surface at B
+        return (bx, by, smooth(-0.75, 0.12 + bob, 7.0, 7.6, t), yaw, smooth(82, 8, 7.0, 7.6, t), 0.0,
+                anim.blend(glide, tread, smooth(0, 1, 7.0, 7.6, t)), ripple)
+    duck = smooth(0, 1, 13.0, 13.5, t) - smooth(0, 1, 15.3, 15.8, t)  # short playful duck under
+    look = 20 * (wob(t, 3, 0.15) - wob(7.6, 3, 0.15)) * smooth(0, 1, 7.6, 9.0, t)
+    return bx, by, 0.12 + bob - 0.62 * duck, yaw + look, 8, 0.0, tread, 0.008 + 0.015 * bump(12.9, 15.9, t)
 
 
-def sinker(t):
-    """Silent sink: stops treading, slips under without a struggle, ends limp on the bottom."""
-    head = smooth(0.1, BOTTOM, 3.0, 9.0, t)
-    tilt = smooth(8, 80, 4.0, 9.0, t)
-    return 0.6, -0.1, head, 120, tilt, anim.blend(anim.tread(t), anim.limp(t), smooth(0, 1, 2.0, 4.5, t))
+CHILD_BOTTOM = -POOL_D + 0.12  # head-center height of a child lying on the floor
+
+
+def child(t):
+    """Toddler-style silent sink: no splashing, no calling out."""
+    effort = smooth(1.0, 0.0, 3.0, 5.5, t)
+    if t < 5.0:  # tiring: the face sinks to the waterline, the paddling fades
+        head = smooth(0.05, -0.01, 3.0, 5.0, t) + 0.03 * math.sin(2 * math.pi * 1.3 * t) * effort
+    else:  # slips under and sinks
+        head = smooth(-0.01, CHILD_BOTTOM, 5.0, 9.0, t)
+    tilt = smooth(25, 10, 3.0, 5.0, t) if t < 5.0 else smooth(10, 75, 5.0, 9.5, t)
+    pose = anim.blend(anim.dogpaddle(t, 5, effort), anim.limp(t, 5), smooth(0, 1, 5.0, 6.5, t))
+    drift = 0.05 * smooth(0, 1, 5, 9, t)
+    return -2.3 + drift, 0.5, head, 235, tilt, 0.0, pose, 0.006 * effort
 
 
 def struggler(t):
-    """Instinctive drowning response for 12 s, then goes limp and sinks."""
-    if t < 12:
-        head = -0.02 + 0.14 * math.sin(2 * math.pi * 1.1 * t)  # mouth bobbing in and out
-        return -2.8, -0.2, head, 300, 12, anim.struggle(t)
-    return (-2.8, -0.2, smooth(-0.05, BOTTOM, 12, 17, t), 300, smooth(12, 80, 12, 17, t),
-            anim.blend(anim.struggle(t), anim.limp(t), smooth(0, 1, 12, 13.5, t)))
+    """Instinctive drowning response for 9 s, then goes limp and sinks."""
+    if t < 9:
+        head = -0.03 + 0.11 * math.sin(2 * math.pi * 1.1 * t + 0.9 * wob(t, 6, 0.35))
+        return 0.3, -0.15, head, 220 + 10 * wob(t, 6, 0.2), 5, 0.0, anim.struggle(t, 6), 0.022
+    return (0.3, -0.15, smooth(-0.05, BOTTOM, 9, 13, t), 220 + 10 * wob(9, 6, 0.2), smooth(5, 78, 9, 13.5, t), 0.0,
+            anim.blend(anim.struggle(t, 6), anim.limp(t, 6), smooth(0, 1, 9, 10.5, t)),
+            0.022 * smooth(1, 0, 9, 11, t))
 
 
-SCENARIOS = [("swimmer", swimmer), ("treader", treader), ("diver", diver),
-             ("sinker", sinker), ("struggler", struggler)]
+# (role, function, default character index, body scale)
+ROLES = [("swimmer", swimmer, 0, 1.0), ("floater", floater, 5, 1.0), ("treader", treader, 3, 1.0),
+         ("diver", diver, 1, 1.0), ("child", child, 4, 0.62), ("struggler", struggler, 2, 1.0)]
 
 # Seed 0 keeps the demo layout. Other seeds shift each role in space and time and
 # reassign characters, so training clips don't repeat the test clip.
-cast = list(range(len(SCENARIOS)))
-shift = [(0.0, 0.0, 0.0, 0.0)] * len(SCENARIOS)
+cast = [r[2] for r in ROLES]
+shift = [(0.0, 0.0, 0.0, 0.0)] * len(ROLES)
 if args.seed:
-    cast = rng.sample(range(len(scene.people)), len(SCENARIOS))
-    shift = [(rng.uniform(-0.6, 0.6), rng.uniform(-0.4, 0.4), rng.uniform(-60, 60), rng.uniform(-3, 6))
-             for _ in SCENARIOS]
+    cast = rng.sample(range(len(scene.people)), len(ROLES))
+    shift = [(rng.uniform(-0.4, 0.4), rng.uniform(-0.3, 0.3), rng.uniform(-40, 40), rng.uniform(-3, 4))
+             for _ in ROLES]
 
 
 def clamp_xy(x, y):
@@ -156,13 +215,15 @@ def clamp_xy(x, y):
 RANDOM_MOTIONS = {  # motion -> (tilt range, eye height range)
     "tread": ((0, 15), (-0.5, 0.25)), "struggle": ((5, 20), (-0.3, 0.15)), "relaxed": ((0, 10), (-0.6, 0.3)),
     "freestyle": ((80, 90), (-0.15, 0.05)), "limp": ((40, 88), (BOTTOM, -0.1)), "streamline": ((30, 80), (-1.3, -0.1)),
+    "backfloat": ((-88, -70), (0.0, 0.1)), "dogpaddle": ((15, 40), (-0.1, 0.08)),
+    "underwater_swim": ((70, 95), (-1.3, -0.3)),
 }
 
 
-def random_frame():
-    """Stills mode: a random subset of people, each in a random motion, place and depth."""
+def random_frame(t):
+    """Stills mode: a random subset of people, each in a random motion, place, depth and size."""
     n = rng.randint(2, 5)
-    chosen, spots, out = rng.sample(range(len(scene.people)), n), [], {}
+    chosen, spots, out, sources = rng.sample(range(len(scene.people)), n), [], {}, []
     for i in range(len(scene.people)):
         if i not in chosen:
             scene.park(i)
@@ -174,16 +235,21 @@ def random_frame():
         spots.append((x, y))
         motion = rng.choice(list(RANDOM_MOTIONS))
         (t0, t1), (h0, h1) = RANDOM_MOTIONS[motion]
+        scale = rng.uniform(0.58, 0.72) if rng.random() < 0.25 else 1.0
         pose = getattr(anim, motion)(rng.uniform(0, 30))
-        info = scene.set_person(i, x, y, rng.uniform(h0, h1), rng.uniform(-180, 180), rng.uniform(t0, t1), pose)
+        roll = anim.freestyle_roll(rng.uniform(0, 30)) if motion == "freestyle" else 0.0
+        head = rng.uniform(h0, h1)
+        info = scene.set_person(i, x, y, head, rng.uniform(-180, 180), rng.uniform(t0, t1), pose, roll, scale)
         info["scenario"] = motion
         out[i] = info
+        sources.append((x, y, rng.uniform(0.0, 0.02) if head > -0.2 else 0.0, rng.uniform(0, 6)))
+    scene.set_water(t + 7 * args.seed, sources)
     return out
 
 
 scene.set_light(rng, sky=None if args.seed else args.sky)
 if not args.seed:
-    scene.sun_rot.Set((30, 0, 40))
+    scene.set_sun(52, -125, 3200)  # afternoon sun from behind the camera, so the walls it sees are lit
 
 cam_pos, cam_look = (-POOL_L / 2 - 1.0, -POOL_W / 2 - 3.0, 4.2), (0.3, 0.3, -0.4)
 if args.seed:
@@ -239,7 +305,7 @@ def tight_boxes(data):
 def refract(pts, cam, n=1.333):
     """Where the camera sees underwater points: replace each point below the surface (z < 0)
     with the spot on the surface where its light ray exits toward the camera (Snell's law,
-    solved by bisection). Submerged limbs look shallower than they are."""
+    solved by bisection, against the mean surface z = 0). Submerged limbs look shallower."""
     pts = pts.copy()
     under = pts[:, 2] < 0
     if not under.any() or cam[2] <= 0:
@@ -280,27 +346,29 @@ def body_box(i, cp):
     return [x0, y0, x1, y1] if x1 - x0 > 4 and y1 - y0 > 4 else None
 
 
-n_frames = int(args.seconds * args.fps)
+n_frames = int(round(args.seconds * args.fps))
 for _ in range(3):  # warm-up renders; the first path-traced frame can show the editor grid
     rep.orchestrator.step(rt_subframes=args.subframes)
 for f in range(n_frames):
-    t = f / args.fps
+    t = args.start + f / args.fps
     if args.random:
-        people = random_frame()
+        people = random_frame(t)
         scene.set_light(rng)
     else:
-        people = {}
-        for k, (name, fn) in enumerate(SCENARIOS):
+        people, sources = {}, []
+        for k, (name, fn, _, scale) in enumerate(ROLES):
             i = cast[k]
             dx, dy, dyaw, dt = shift[k]
-            x, y, head, yaw, tilt, pose = fn(max(0.0, t + dt))
+            x, y, head, yaw, tilt, roll, pose, ripple = fn(max(0.0, t + dt))
             x, y = clamp_xy(x + dx, y + dy)
-            info = scene.set_person(i, x, y, head, yaw + dyaw, tilt, pose)
+            info = scene.set_person(i, x, y, head, yaw + dyaw, tilt, pose, roll, scale)
             info["scenario"] = name
             people[i] = info
+            sources.append((x, y, ripple, 1.7 * k))
         for i in range(len(scene.people)):
             if i not in cast:
                 scene.park(i)
+        scene.set_water(t + 7 * args.seed, sources)
     for i, info in people.items():
         if info["head_state"] == "below":
             under_since.setdefault(i, t)
@@ -308,7 +376,6 @@ for f in range(n_frames):
             under_since.pop(i, None)
         info["seconds_below"] = round(t - under_since[i], 2) if i in under_since else 0.0
 
-    scene.set_ripples(t + 7 * args.seed)
     for _ in range(2):
         simulation_app.update()
     rep.orchestrator.step(rt_subframes=args.subframes)
@@ -347,6 +414,7 @@ for f in range(n_frames):
         with open(os.path.join(args.out, "yolo", "labels", stem + ".txt"), "w") as fh:
             fh.write("\n".join(yolo_lines) + ("\n" if yolo_lines else ""))
     jl.write(json.dumps({"frame": f + 1, "t": round(t, 3), "people": {str(i + 1): v for i, v in people.items()}}) + "\n")
+    jl.flush()
     if f % args.fps == 0:
         print(f"t={t:.0f}s frame {f + 1}/{n_frames}", flush=True)
 
@@ -354,5 +422,6 @@ clean.close()
 labeled.close()
 gt.close()
 jl.close()
+print("DONE", flush=True)
 rep.orchestrator.wait_until_complete()
 simulation_app.close()

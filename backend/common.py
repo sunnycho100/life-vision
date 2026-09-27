@@ -15,6 +15,11 @@ def digest(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def code_digest(path):
+    # Git/editor CRLF conversion must not invalidate an otherwise identical adapter.
+    return hashlib.sha256(Path(path).read_text(encoding="utf-8-sig").encode("utf-8")).hexdigest()
+
+
 def read_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 

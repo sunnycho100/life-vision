@@ -13,7 +13,7 @@ import sysconfig
 import time
 from urllib.request import urlopen
 import numpy as np
-from backend.common import ROOT, digest, read_json, write_json
+from backend.common import ROOT, digest, read_json, write_json, code_digest
 from backend.detector import PythonDetector, preprocess, decode, onnx_options
 
 URL = "https://storage.googleapis.com/rfdetr/nano_coco/checkpoint_best_regular.pth"
@@ -88,7 +88,7 @@ def verify_native(manifest_path, provider="CPUExecutionProvider"):
                         **report, "two_forward_passes_ms": (time.perf_counter() - before) * 1000})
     return {"passed": True, "onnxruntime": ort.__version__, "provider": session.get_providers()[0], "graph_optimization": optimization,
             "platform": sysconfig.get_platform(), "model_sha256": m["onnx"]["sha256"], "frames": reports,
-            "adapter_sha256": digest(ROOT / "backend/detector.py"),
+            "adapter_sha256": code_digest(ROOT / "backend/detector.py"),
             "scope": "Numerical equivalence only; not detection accuracy or generalization."}
 
 

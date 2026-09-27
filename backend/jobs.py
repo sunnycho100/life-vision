@@ -10,7 +10,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from backend.common import ROOT, digest, read_json, write_json
+from backend.common import ROOT, digest, read_json, write_json, code_digest
 from backend.detector import load_manifest
 
 
@@ -71,7 +71,7 @@ class JobManager:
                     "model_manifest": model, "model_manifest_sha256": digest(self.manifest_path),
                     "backend": self.backend, "provider": self.provider, "pipeline_version": 1,
                     "worker_python": self.worker_python}
-            spec["pipeline_sha256"] = {name: digest(ROOT / "backend" / name) for name in ["detector.py", "worker.py", "common.py"]}
+            spec["pipeline_sha256"] = {name: code_digest(ROOT / "backend" / name) for name in ["detector.py", "worker.py", "common.py"]}
             fingerprint = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
             for path in self.root.glob("*/manifest.json"):
                 old = read_json(path)

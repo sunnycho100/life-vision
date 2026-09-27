@@ -7,7 +7,7 @@ from importlib.metadata import version
 from pathlib import Path
 import sysconfig
 import numpy as np
-from backend.common import digest, read_json
+from backend.common import digest, read_json, code_digest
 
 RF_VERSION = "1.11.0"
 MEAN = np.array([.485, .456, .406], dtype=np.float32)[:, None, None]
@@ -96,7 +96,7 @@ class OnnxDetector:
         report = read_json(report_path) if report_path.is_file() else {}
         if not (report.get("passed") and report.get("model_sha256") == artifact["sha256"]
                 and report.get("provider") == provider and report.get("onnxruntime") == ort.__version__
-                and report.get("graph_optimization") == optimization and report.get("adapter_sha256") == digest(__file__)):
+                and report.get("graph_optimization") == optimization and report.get("adapter_sha256") == code_digest(__file__)):
             raise ValueError("Run python -m tools.prepare_rfdetr --verify-only on this runtime before ONNX deployment.")
         self.session = ort.InferenceSession(str(model), opts, providers=[provider])
         self.input_name = self.session.get_inputs()[0].name

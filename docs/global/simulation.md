@@ -98,6 +98,17 @@ The fine-tuned checkpoint is 121 MB, too big for git; regenerate it with the scr
 
 Fine-tuned RF-DETR-N + edge logic on every scenario (IDs shown / real people, ID switches): baseline 5/5, 0 · resurface 4/4, 0 · crossing 4/4, 0 · silent_sink_busy 5/5, 0 · entry 3/3, 0. Precision and recall 0.997 to 1.00 everywhere. An earlier containment-only rule dropped one of two overlapping people in `crossing` (recall 0.74); the three-pass cleanup above fixed that.
 
+## Visual change test (higher-quality demo render)
+
+`sim/mujoco/demo.py` renders a 10 s scene with new textures, lighting, and body shapes the models never trained on (6 people). With edge logic:
+
+| Detector | Precision | Recall | Recall, fully under | IDs shown / people | ID switches |
+|---|---|---|---|---|---|
+| Stock RF-DETR-N | 0.88 | 0.76 | 0.34 | 6 / 6 | 4 |
+| RF-DETR-N fine-tuned on the old render | 1.00 | 0.93 | 0.71 | 6 / 6 | 8 |
+
+Even a small visual change costs recall, and the switches come from the collapsing person overlapping the swimmer. Real footage will be a far bigger change, so the real detector must be fine-tuned on real frames.
+
 ## How the sim helps with real footage
 
 A detector trained on capsule people will not work on real people, and the reverse is also true (pretrained YOLO above). The sim is not training data for the real detector. What it gives us:

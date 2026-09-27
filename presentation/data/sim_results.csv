@@ -6,3 +6,5 @@ Stock RF-DETR-N + default tracker,resurface,0.81,0.79,0.60,18,4,3
 Stock RF-DETR-N + edge logic,resurface,0.86,0.79,0.60,5,4,1
 YOLO11n fine-tuned on sim + default tracker,resurface,1.00,1.00,1.00,4,4,0
 RF-DETR-N fine-tuned on sim + edge logic,resurface,1.00,1.00,1.00,4,4,0
+Stock RF-DETR-N + edge logic,demo_hq (new visuals),0.88,0.76,0.34,6,6,4
+RF-DETR-N fine-tuned on old render + edge logic,demo_hq (new visuals),1.00,0.93,0.71,6,6,8

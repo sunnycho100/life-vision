@@ -55,6 +55,21 @@ On a MacBook GPU, 10 s of video takes about 48 s to process (88 s with stock Nan
 
 After changing `tracking.py`, re-run only the tracker over a finished job instead of re-detecting: `.venv/bin/python -m tools.retrack_job artifacts/poolside/jobs/<job id>`.
 
+## Precomputed analyses
+
+The [`analyses-v1` release](https://github.com/sunnycho100/life-vision/releases/tag/analyses-v1) has finished jobs for the full `NycwxaU4GPw` wave-pool video and two 10 s clips, so they play back without the 14 minutes of detection. Set up the fine-tuned model first, then:
+
+```bash
+.venv/bin/python -m tools.analysis_bundle import lifevision_analyses_v1.zip
+S=artifacts/poolside/sources
+.venv/bin/python backend/serve.py --backend python \
+  --extra-video $S/80dc472660c3f7fd0c857c672647f5eaecbc595007281341533d165b9d2ef359.mp4 "Wave pool NycwxaU4GPw" \
+  --extra-video $S/fcd076c383c0670e7df1ac5f24fee0c10f1f77271c7ecbcc0c5d0d787c363e03.mp4 "NycwxaU4GPw 35-45 s" \
+  --extra-video $S/14c6355bf0ee95dc50b72173438156ca09fe3072ddb5c0c9368ad465e23ea2ef.mp4 "UaFwQMfQThE 35-45 s"
+```
+
+Pick a video in the source list and press Analyze: it returns the stored job. Uploading the same files works too. This only holds while `detector.py`, `worker.py`, `common.py` and `tracking.py` are unchanged. Share your own finished jobs with `.venv/bin/python -m tools.analysis_bundle export <job id> ... -o bundle.zip`.
+
 ## Tests
 
 ```bash

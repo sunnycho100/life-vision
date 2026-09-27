@@ -7,7 +7,7 @@ const workspaceDir = process.cwd();
 const CODEX_HOME = process.env.CODEX_HOME ?? path.join(process.env.HOME ?? "", ".codex");
 const SKILL_DIR = process.env.PRESENTATIONS_SKILL_DIR
   ?? path.join(CODEX_HOME, "plugins", "cache", "openai-primary-runtime", "presentations", "26.921.11914", "skills", "presentations");
-const TMP_DIR = path.join(workspaceDir, ".codex-build", "presentation", "team-refined-v3");
+const TMP_DIR = path.join(workspaceDir, ".codex-build", "presentation", "team-refined-v5");
 const FINAL_PPTX = path.join(workspaceDir, "presentation", "slides", "final", "life-vision-team-refined.pptx");
 const RUNTIME_PYTHON = process.env.RUNTIME_PYTHON ?? "python3";
 
@@ -156,9 +156,9 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   text(s, "LIFE VISION", 58, 175, 510, 78, { size: 54, bold: true, color: C.text });
   text(s, "A second set of eyes\nfor the backyard pool", 58, 256, 500, 104, { size: 29, color: C.teal, valign: "top" });
   text(s, "Hackathon prototype", 58, 576, 260, 30, { size: 14, bold: true, color: C.text });
-  text(s, "David, Rohan, Sunny, Joanne and Sam", 58, 613, 520, 26, { size: 13, color: C.muted });
+  text(s, "Local video analysis · 24-hour prototype", 58, 613, 520, 26, { size: 13, color: C.muted });
   note(s,
-    "David, 15 seconds. A camera can record every second around a pool and still miss the moment that matters. Life Vision adds a local monitoring layer that tracks each person and explains when head-submersion evidence persists. Our goal is a second set of eyes for the responsible adult, using cameras families may already own.",
+    "Opening, 15 seconds. A camera can record every second around a pool and still miss the moment that matters. Life Vision adds a local monitoring layer that tracks each person and explains when head-submersion evidence persists. Our goal is a second set of eyes for the responsible adult, using cameras families may already own.",
     ["Concept image generated for this presentation. It does not depict a real incident."]
   );
 }
@@ -185,7 +185,7 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   text(s, "Technology can support attention. It cannot replace supervision or trained rescue staff.", 656, 604, 566, 46, { size: 18, bold: true, color: C.text, align: "center" });
   footer(s, "CDC 2026 · CPSC 2024 · LIFEGUARDED-POOL CASE SERIES 2000–2008");
   note(s,
-    "Rohan, 30 seconds. Three facts shaped our problem statement. CDC reports that more children ages one to four die from drowning than from any other cause. CPSC found that sixty-one percent of reported pool and spa fatalities involving children under five were associated with a gap in adult supervision. A published case series identified 140 deaths in pools with lifeguards from 2000 through 2008, and victims were first identified twice as often by other swimmers or bystanders as by lifeguards. The authors emphasize that these deaths are uncommon and lifeguards remain important. Our point is that no human observer can see every person every second, so technology can add another layer without replacing supervision.",
+    "Problem, 30 seconds. Three facts shaped our problem statement. CDC reports that more children ages one to four die from drowning than from any other cause. CPSC found that sixty-one percent of reported pool and spa fatalities involving children under five were associated with a gap in adult supervision. A published case series identified 140 deaths in pools with lifeguards from 2000 through 2008, and victims were first identified twice as often by other swimmers or bystanders as by lifeguards. The authors emphasize that these deaths are uncommon and lifeguards remain important. Our point is that no human observer can see every person every second, so technology can add another layer without replacing supervision.",
     [
       "CDC, Drowning Facts: https://www.cdc.gov/drowning/data-research/facts/index.html",
       "U.S. CPSC, Pool or Spa Submersion, 2024 Report, Table 14: https://www.cpsc.gov/s3fs-public/Pool-or-Spa-Submersion-Estimated-Nonfatal-Drowning-Injuries-and-Reported-Drownings-2024-Report.pdf",
@@ -234,7 +234,7 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   text(s, "Demo thresholds are shortened, clearly labeled, and never presented as medical cutoffs.", 82, 586, 1116, 42, { size: 19, bold: true, color: C.text, align: "center" });
   footer(s, "ONE PERSON · ONE TIMER · AN EXPLAINABLE REASON FOR EVERY ALERT");
   note(s,
-    "Rohan, 30 seconds. The system tracks each person and watches whether the head is above or below the water. When the head goes below, a per-person timer starts. At the configurable warning threshold, the state becomes yellow. If that condition persists to the alarm threshold, the state becomes red and tells the user to check the pool. If the head comes back above water, the timer resets to green. Entry detection is a separate alert that the user must arm. For this demonstration, the thresholds are intentionally shortened and clearly labeled. This is prolonged head-submersion detection, not a drowning diagnosis.",
+    "System logic, 30 seconds. The system tracks each person and watches whether the head is above or below the water. When the head goes below, a per-person timer starts. At the configurable warning threshold, the state becomes yellow. If that condition persists to the alarm threshold, the state becomes red and tells the user to check the pool. If the head comes back above water, the timer resets to green. Entry detection is a separate alert that the user must arm. For this demonstration, the thresholds are intentionally shortened and clearly labeled. This is prolonged head-submersion detection, not a drowning diagnosis.",
     ["System architecture: docs/global/architecture.md", "Decision and alert rules: docs/global/decisions.md"]
   );
 }
@@ -246,21 +246,21 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   topRule(s, "Team execution", 4);
   title(s, "Five workstreams met at one shared data contract");
   const nodes = [
-    pipelineNode(s, "VIDEO\nsource", "David", 58),
-    pipelineNode(s, "PERSON + HEAD\ndetector", "Joanne", 300),
-    pipelineNode(s, "TRACK +\nID stitching", "Sunny", 542),
-    pipelineNode(s, "EVENT\nengine", "Rohan", 784),
-    pipelineNode(s, "APP +\nreplay", "David", 1026, "accent"),
+    pipelineNode(s, "VIDEO\nsource", "INPUT", 58),
+    pipelineNode(s, "PERSON + HEAD\ndetector", "VISION", 300),
+    pipelineNode(s, "TRACK +\nID stitching", "TRACKING", 542),
+    pipelineNode(s, "EVENT\nengine", "LOGIC", 784),
+    pipelineNode(s, "APP +\nreplay", "INTERFACE", 1026, "accent"),
   ];
   for (let i = 0; i < nodes.length - 1; i++) connector(s, nodes[i], nodes[i + 1]);
-  text(s, "Sam tested head evidence and owned evaluation across detector, tracker, and event output.", 238, 350, 804, 38, { size: 18, bold: true, color: C.blue, align: "center" });
+  text(s, "Evaluation covered head evidence, detection, tracking, and event output.", 238, 350, 804, 38, { size: 18, bold: true, color: C.blue, align: "center" });
 
   line(s, 102, 489, 1076, 0, C.line, 3);
   const timeline = [
     ["H1", "Freeze JSON\ncontracts", "Everyone"],
-    ["H3", "Sim tracks feed\nengine and UI", "Sunny, Rohan and David"],
+    ["H3", "Sim tracks feed\nengine and UI", "Simulation + integration"],
     ["H6", "First end-to-end\nred alert", "Integration"],
-    ["H9", "Detector and tracker\nreplace fake data", "Joanne, Sunny and Sam"],
+    ["H9", "Detector and tracker\nreplace fake data", "Vision + evaluation"],
     ["H12", "Freeze, rehearse,\nkeep a backup", "Everyone"],
   ];
   timeline.forEach(([hour, label, owner], index) => {
@@ -272,7 +272,7 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   });
   footer(s, "BUILD AGAINST FAKE DATA FIRST · NOBODY WAITS FOR ANOTHER WORKSTREAM");
   note(s,
-    "Sunny, 35 seconds. The team could work in parallel because we froze two JSON contracts first. David built the overlay against hand-made results. Rohan built the event engine against Sunny's simulator tracks. Joanne delivered person and head evidence into the same contract. Sam evaluated each stage instead of waiting for one final accuracy number. By hour six, simulated tracks could drive a red alert in the frontend. By hour nine, real detector output replaced the fake data. The final hours were reserved for fixing, recording a fallback, and rehearsing.",
+    "Architecture, 35 seconds. The team could work in parallel because we froze two JSON contracts first. The overlay used hand-made results while the event engine used simulator tracks. Person and head evidence entered the same contract, and evaluation covered each stage instead of waiting for one final accuracy number. By hour six, simulated tracks could drive a red alert in the frontend. By hour nine, real detector output replaced the fake data. The final hours were reserved for fixing, recording a fallback, and rehearsing.",
     ["Repository architecture: docs/global/architecture.md", "12-hour milestone plan: docs/global/milestones.md"]
   );
 }
@@ -285,14 +285,14 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   title(s, "Simulation covered cases the team could not film safely");
   image(s, "sim", 58, 194, 548, 312, "MuJoCo pool simulation with multiple scripted people", "cover", 18);
   image(s, "isaac", 674, 194, 548, 312, "Isaac Sim editor showing a realistic pool scene", "cover", 18, { left: 0.05, top: 0.02, right: 0.25, bottom: 0.04 });
-  text(s, "SUNNY · MUJOCO", 58, 526, 240, 24, { size: 12, bold: true, color: C.teal });
+  text(s, "MUJOCO TEST BENCH", 58, 526, 240, 24, { size: 12, bold: true, color: C.teal });
   text(s, "Five scenarios with exact boxes, head height, and identity", 58, 556, 520, 56, { size: 19, bold: true, color: C.text, valign: "top" });
-  text(s, "ROHAN · ISAAC SIM", 674, 526, 240, 24, { size: 12, bold: true, color: C.blue });
+  text(s, "ISAAC SIM TEST BENCH", 674, 526, 240, 24, { size: 12, bold: true, color: C.blue });
   text(s, "More realistic people, moving water, and a held-out 300-frame clip", 674, 556, 520, 56, { size: 19, bold: true, color: C.text, valign: "top" });
   text(s, "Safe cases: silent sink, collapse, entry, and resurfacing elsewhere", 58, 632, 1164, 30, { size: 17, color: C.muted, align: "center" });
   footer(s, "SIMULATION PROVIDES EXACT ANSWERS · IT DOES NOT ESTABLISH REAL-WORLD ACCURACY");
   note(s,
-    "Rohan, 30 seconds. Sunny built a MuJoCo test bench with a shallow end, deep end, buoyancy, and five scenarios. It produced exact person boxes and exact head height without hand labeling. Rohan extended the work in Isaac Sim with more realistic characters, lighting, moving water, and a held-out clip. Simulation let the team test silent sinking, collapse, entry, and resurfacing elsewhere without putting anyone at risk. It also gave Sam exact answers for scoring. These environments validate the software pipeline, not real-world accuracy.",
+    "Simulation, 30 seconds. The MuJoCo test bench included a shallow end, deep end, buoyancy, and five scenarios. It produced exact person boxes and exact head height without hand labeling. Isaac Sim extended the work with more realistic characters, lighting, moving water, and a held-out clip. Simulation let the team test silent sinking, collapse, entry, and resurfacing elsewhere without putting anyone at risk. It also provided exact answers for scoring. These environments validate the software pipeline, not real-world accuracy.",
     ["MuJoCo test bench: docs/global/simulation.md", "Isaac Sim results: model/README.md"]
   );
 }
@@ -365,7 +365,7 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   text(s, "Decision: keep lightweight YOLO for the hackathon pipeline. Retain RF-DETR as the strongest zero-shot candidate for unfamiliar footage.", 82, 586, 1116, 42, { size: 19, bold: true, color: C.text, align: "center" });
   footer(s, "ALL VALUES ON SIMULATION · SAME SCENE OR CHARACTER SET WHERE NOTED");
   note(s,
-    "Joanne, 40 seconds. The teammate deck captured the first turning point. On the held-out MuJoCo scenario, stock YOLOv8n found twelve percent of people and YOLO11n found twenty-five percent. Stock RF-DETR Nano found seventy-nine percent. The second experiment used Rohan's held-out Isaac clip and focused on people whose heads were fully under water. Stock YOLO found sixteen percent, stock RF-DETR-S found seventy-five percent, the MuJoCo-tuned YOLO found eighty-three percent, and the Isaac-tuned YOLO reached ninety-five percent. That led to a practical split: use lightweight YOLO in the hackathon pipeline after fine-tuning, while treating RF-DETR as the stronger zero-shot candidate. Every number here is synthetic and does not predict real-pool performance.",
+    "Model results, 40 seconds. On the held-out MuJoCo scenario, stock YOLOv8n found twelve percent of people and YOLO11n found twenty-five percent. Stock RF-DETR Nano found seventy-nine percent. The second experiment used the held-out Isaac clip and focused on people whose heads were fully under water. Stock YOLO found sixteen percent, stock RF-DETR-S found seventy-five percent, the MuJoCo-tuned YOLO found eighty-three percent, and the Isaac-tuned YOLO reached ninety-five percent. That led to a practical split: use lightweight YOLO in the hackathon pipeline after fine-tuning, while treating RF-DETR as the stronger zero-shot candidate. Every number here is synthetic and does not predict real-pool performance.",
     ["MuJoCo detector results: docs/global/simulation.md", "Isaac held-out results: model/README.md"]
   );
 }
@@ -388,7 +388,7 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   text(s, "Clear water kept submerged bodies visible. The team changed the alarm from “person missing” to “head not above water.”", 82, 592, 1116, 40, { size: 19, bold: true, color: C.text, align: "center" });
   footer(s, "HELD-OUT MUJOCO RESURFACE SCENARIO · SYNTHETIC ONLY");
   note(s,
-    "Sunny, 30 seconds. Detection alone did not give us a usable timer. Stock RF-DETR with the default tracker produced eighteen IDs for four people. Sunny added duplicate-box cleanup, delayed track confirmation, and identity stitching after short losses. The result was four IDs with zero switches across all five MuJoCo scenarios. The test bench also exposed a more important design mistake: in clear water, a submerged body can stay visible, so a missing-person timer never starts. Rohan's event logic therefore times the head state and keeps the missing registry only as backup.",
+    "Tracking, 30 seconds. Detection alone did not give us a usable timer. Stock RF-DETR with the default tracker produced eighteen IDs for four people. Duplicate-box cleanup, delayed track confirmation, and identity stitching after short losses reduced the result to four IDs with zero switches across all five MuJoCo scenarios. The test bench also exposed a more important design mistake: in clear water, a submerged body can stay visible, so a missing-person timer never starts. The event logic therefore times the head state and keeps the missing registry only as backup.",
     ["Tracking results and edge logic: docs/global/simulation.md", "Team decision record: docs/global/decisions.md", "Visual: presentation/images/before_after_tracking.png"]
   );
 }
@@ -401,7 +401,7 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   title(s, "The demo explains the state change, not just the box");
   image(s, "demo", 58, 194, 790, 436, "Synthetic pool scene with person tracking boxes", "cover", 18);
   rect(s, 880, 194, 342, 436, C.white, 18, C.line, 1);
-  text(s, "DAVID · FRONTEND", 906, 216, 290, 24, { size: 12, bold: true, color: C.teal });
+  text(s, "FRONTEND", 906, 216, 290, 24, { size: 12, bold: true, color: C.teal });
   const states = [
     ["GREEN", "tracked normally", C.teal],
     ["YELLOW", "head timer running", C.amber],
@@ -419,7 +419,7 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   text(s, "DEMO MODE MUST BE DISCLOSED", 906, 602, 290, 20, { size: 10, bold: true, color: C.red });
   footer(s, "ACTIVATE MONITORING · SHOW GREEN, YELLOW, RED · REPLAY THE EVENT");
   note(s,
-    "David, about 50 seconds plus interaction. Start with the prerecorded team pool clip already loaded. Press Activate Monitoring and point out the intentionally visible scan. Each person gets a stable ID and a green box. When the head-submersion evidence persists, the timer appears and the box becomes yellow. At the demo threshold it becomes red, the alert sounds, and the incident can be replayed. Show that the user can select yellow and red alerts, red only, or on-screen alerts. State the mode accurately: real model inference, a recording of a successful pipeline run, or the scripted interaction prototype. Never describe scripted boxes as live inference.",
+    "Live demo, about 50 seconds plus interaction. Start with the prerecorded team pool clip already loaded. Press Activate Monitoring and point out the intentionally visible scan. Each person gets a stable ID and a green box. When the head-submersion evidence persists, the timer appears and the box becomes yellow. At the demo threshold it becomes red, the alert sounds, and the incident can be replayed. Show that the user can select yellow and red alerts, red only, or on-screen alerts. State the mode accurately: real model inference, a recording of a successful pipeline run, or the scripted interaction prototype. Never describe scripted boxes as live inference.",
     ["Frontend: frontend/index.html, frontend/styles.css, frontend/app.js", "Fallback visual: presentation/images/demo_hq_tracking_still.png"]
   );
 }
@@ -446,9 +446,9 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   });
   rect(s, 58, 584, 1164, 68, C.paleBlue, 14, C.blue, 1);
   text(s, "The team fixed each issue and reran every published number. Accuracy remains synthetic-only.", 82, 598, 1116, 40, { size: 20, bold: true, color: C.text, align: "center" });
-  footer(s, "SAM · EVALUATION AND FAILURE CASES");
+  footer(s, "EVALUATION AND FAILURE CASES");
   note(s,
-    "Sam, 30 seconds. The team caught three errors that changed how we evaluate the system. A render batch omitted the water, which made early YOLO scores look far too good. A test script swapped color channels, and we found it only because an independent script disagreed. The first head-under label was too strict and misclassified ordinary swimmers. We fixed each problem, rebuilt the labels from stored head height, and reran every number. The remaining limitation is still fundamental: all accuracy results come from synthetic scenes with simplified water, people, and motion.",
+    "Evaluation, 30 seconds. The team caught three errors that changed how we evaluate the system. A render batch omitted the water, which made early YOLO scores look far too good. A test script swapped color channels, and we found it only because an independent script disagreed. The first head-under label was too strict and misclassified ordinary swimmers. We fixed each problem, rebuilt the labels from stored head height, and reran every number. The remaining limitation is still fundamental: all accuracy results come from synthetic scenes with simplified water, people, and motion.",
     ["Corrections and known limits: docs/global/simulation.md", "Technical story: presentation/technical-story.md"]
   );
 }
@@ -472,7 +472,7 @@ function pipelineNode(slide, label, owner, x, state = "normal") {
   rect(s, 58, 648, 1164, 42, C.pale, 12, C.teal, 1);
   text(s, "A supervision aid. It does not replace watching children, pool fences, or lifeguards.", 78, 654, 1124, 28, { size: 17, bold: true, color: C.text, align: "center" });
   note(s,
-    "Rohan, 40 seconds. The next experiment uses real pool footage recorded safely. Joanne will label each head above or below water and fine-tune the detector. Sam will split by recording session and report detection delay, missed events, false warnings per monitored hour, and identity errors. Sunny will connect the pipeline, Rohan will validate the head timer, and David will replace scripted frontend events with real results. Uploaded video remains the reliable demo source. Webcam and RTSP follow, then authorized Ring and Nest adapters. The overlay stays in our application. Life Vision remains a supervision aid and does not replace watching children, pool barriers, or lifeguards.",
+    "Next test, 40 seconds. The next experiment uses real pool footage recorded safely. The model workflow will label each head above or below water and fine-tune the detector. Evaluation will split by recording session and report detection delay, missed events, false warnings per monitored hour, and identity errors. Integration will connect the pipeline, validate the head timer, and replace scripted frontend events with real results. Uploaded video remains the reliable demo source. Webcam and RTSP follow, then authorized Ring and Nest adapters. The overlay stays in our application. Life Vision remains a supervision aid and does not replace watching children, pool barriers, or lifeguards.",
     [
       "Next-step evaluation plan: docs/global/architecture.md",
       "Ring Developer Experience: https://developer.amazon.com/docs/ring/get-started.html",

@@ -27,7 +27,16 @@ DEFAULTS = {
     "jitter": 0.4,          # allowed centre shift, in box sizes, for detector wobble (arms up, partly under)
     "max_speed": 0.06,      # plus this share of the frame per second of gap (a swimmer's drift)
     "stitch_max": 0.10,     # never more than this share of the frame, however long the gap
-    "size_ratio": 1.7,      # box heights must agree within this factor
+    "size_ratio": 1.7,      # box heights must agree within this factor ...
+    "same_spot": 0.5,       # ... unless the new box is within this many box sizes of the old spot: a swimmer going
+                            # partly under shrinks to a head (new clip, 37 s: height 0.12 -> 0.06), still the same person
+    "blink_window_s": 8.0,  # vanishing and coming back blink_count times within this window counts as danger (yellow),
+    "blink_count": 0,       # even while visible (0 = off). The struggling girl in the new clip blinked out 0.3-3.6 s at a
+                            # time, but in these crowds a 3-in-8 s rule flagged 77 and 115 people; stricter rules missed her.
+    "blink_min_gap_s": 0.3, # ignore single-frame dropouts
+    "group_reach": 1.0,     # a visible box within this many box sizes of a missing person's last spot "covers" them:
+                            # their warning clock pauses (crowded pools: the box merged into a neighbour's) and
+                            # restarts once nobody is there. IDs never move, so a lifeguard can't take anyone's ID.
     "back_show_s": 2.0,     # after a reliable person comes back from a gap of hold_s or more, flag them this long
     "mass_loss": 0.4,       # fewer boxes than this share of last frame's visible people (3+) = glitch frame, skipped
     "hold_s": 1.0,          # draw a lost person's last box this long as "missing" before any warning
@@ -121,7 +130,13 @@ class PoolTracker:
         d = np.hypot((box[0] + box[2] - lb[0] - lb[2]) / 2, (box[1] + box[3] - lb[1] - lb[3]) / 2)
         ratio = (box[3] - box[1]) / max(lb[3] - lb[1], 1e-6)
         allowed = min(self.cfg["jitter"] * size + self.cfg["max_speed"] * gap, self.cfg["stitch_max"])
-        return d <= allowed and 1 / self.cfg["size_ratio"] <= ratio <= self.cfg["size_ratio"]
+        same_spot = d <= self.cfg["same_spot"] * size
+        return d <= allowed and (same_spot or 1 / self.cfg["size_ratio"] <= ratio <= self.cfg["size_ratio"])
+
+    def _blinks(self, p, t):
+        """How many times this person vanished (at least blink_min_gap_s) and came back within blink_window_s."""
+        return sum(1 for start, end in p.get("gaps", [])
+                   if end - start >= self.cfg["blink_min_gap_s"] and end > t - self.cfg["blink_window_s"])
 
     def _stitch(self, t, box, visible):
         """Nearest person lost within forget_s whose last box this new box plausibly continues, or None.
@@ -179,20 +194,28 @@ class PoolTracker:
             pid = self.person_of[tid]
             p = self.people[pid]
             if "last_seen" in p and t - p["last_seen"] > 1.5 / self.hz:  # remember out-of-sight stretches
-                p["gaps"] = [g for g in p.get("gaps", []) if g[1] > t - self.cfg["struggle_window_s"]] + [(p["last_seen"], t)]
+                keep = t - max(self.cfg["struggle_window_s"], self.cfg["blink_window_s"])
+                p["gaps"] = [g for g in p.get("gaps", []) if g[1] > keep] + [(p["last_seen"], t)]
             p.update(box=[float(v) for v in box], last_seen=t, conf=float(conf), at_edge=self._at_edge(box))
             p.setdefault("seen", []).append(t)
             p["seen"] = [s for s in p["seen"] if s > t - 2.0]
             p.pop("reliable", None)
             out.append({"person_id": pid, "bbox_xyxy_normalized": p["box"], "confidence": round(p["conf"], 3),
-                        "visible": True, "level": "safe", "missing_s": 0.0, "continued": continued,
+                        "visible": True, "level": "warning" if self.cfg["blink_count"] and self._blinks(p, t) >= self.cfg["blink_count"] else "safe",
+                        "blinks": self._blinks(p, t), "missing_s": 0.0, "continued": continued,
                         "back_after_s": p["back_after"] if t <= p.get("back_until", -1) else None})
+        shown = [o["bbox_xyxy_normalized"] for o in out]
         for pid, p in list(self.people.items()):
             if pid in visible or "box" not in p:
                 continue
             missing = t - p["last_seen"]
+            lb = p["box"]; size = max(lb[2] - lb[0], lb[3] - lb[1])
+            lc = ((lb[0] + lb[2]) / 2, (lb[1] + lb[3]) / 2)
+            if any(np.hypot((v[0] + v[2]) / 2 - lc[0], (v[1] + v[3]) / 2 - lc[1]) <= self.cfg["group_reach"] * size for v in shown):
+                p["covered_at"] = t
+            clock = t - max(p["last_seen"], p.get("covered_at", -1e9))  # time alone at their last spot
             window = t - self.cfg["struggle_window_s"]
-            out_recently = missing + sum(max(0.0, end - max(start, window)) for start, end in p.get("gaps", []))
+            out_recently = clock + sum(max(0.0, end - max(start, window)) for start, end in p.get("gaps", []))
             if "reliable" not in p:  # decided once, at the moment the person is lost
                 recent = [s for s in p.get("seen", []) if s > p["last_seen"] - 2.0]
                 p["reliable"] = (p["last_seen"] - p["first_seen"] >= self.cfg["reliable_s"]
@@ -203,7 +226,8 @@ class PoolTracker:
             if missing < self.cfg["hold_s"]:
                 level = "safe"
             else:
-                level = "alarm" if missing >= self.cfg["alarm_s"] else "warning" if out_recently >= self.cfg["warn_s"] else "missing"
+                level = "alarm" if clock >= self.cfg["alarm_s"] else "warning" if (
+                    out_recently >= self.cfg["warn_s"] or self.cfg["blink_count"] and self._blinks(p, t) >= self.cfg["blink_count"]) else "missing"
             out.append({"person_id": pid, "bbox_xyxy_normalized": p["box"], "confidence": round(p["conf"], 3),
                         "visible": False, "level": level, "missing_s": round(out_recently, 2), "continued": False})
         self._last_visible, self._last_out = len(visible), out
@@ -264,4 +288,13 @@ if __name__ == "__main__":  # smoke check: one person lost 2 s and back nearby k
     for f in range(4):
         people = tr.update(4.2 + f / 5, [{"bbox_xyxy_normalized": guard, "confidence": 0.9}])
     assert {p["person_id"] for p in people if p["visible"]} != {1} and any(p["person_id"] == 1 and not p["visible"] for p in people), people
+    tr = PoolTracker(10, blink_count=3)  # blinking (when enabled): out 0.5 s, back 0.5 s, three times -> warning while visible
+    girl = [0.70, 0.45, 0.75, 0.57]
+    levels = []
+    for f in range(80):
+        t = f / 10
+        gone = t >= 3 and int((t - 3) * 2) % 2 == 0 and t < 6
+        people = tr.update(t, [] if gone else [{"bbox_xyxy_normalized": girl, "confidence": 0.9}])
+        levels += [p["level"] for p in people if p["person_id"] == 1 and p["visible"]]
+    assert levels[0] == "safe" and "warning" in levels, levels
     print("tracking smoke check ok")

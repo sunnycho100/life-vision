@@ -63,6 +63,17 @@ function clearDisplay() {currentDetections = []; currentTracks = []; detectionTr
 // of detection on their own, which raised 5 false alerts in the first 30 s of the wave pool clip.
 // ponytail: fixed size floor tuned on one camera; lower it when the detector sees small people reliably.
 const MIN_UNDER_HEIGHT = .05;
+// Seen, but vanished and came back 3+ times in the last 8 s (tracker level "warning" while visible): a struggle pattern.
+function blinking(track) {
+  const b = track.bbox_xyxy_normalized;
+  return track.visible && track.level === 'warning' && mappingValid() && b[3] - b[1] >= MIN_UNDER_HEIGHT && inside(boxAnchor(b), config.corners);
+}
+// Demo only: a finished job may carry demo_flags ([{person_id, start, end}]) set by hand. The review draws them as a
+// flashing box and says "flagged manually" at top right; the model never produces these.
+function demoFlag(track) {
+  const t = video.currentTime;
+  return (job?.demo_flags ?? []).some(f => f.person_id === track.person_id && t >= f.start && t <= f.end);
+}
 function possiblyUnder(track) {
   const b = track.bbox_xyxy_normalized;
   return !track.visible && mappingValid() && b[3] - b[1] >= MIN_UNDER_HEIGHT && inside(boxAnchor(b), config.corners);
@@ -89,9 +100,18 @@ function draw() {
   if (detectionTracks) { // tracked people: stable IDs, lost people held at their last box
     for (const track of detectionTracks) {
       const b = track.bbox_xyxy_normalized, a = point(b.slice(0, 2)), z = point(b.slice(2));
+      if (demoFlag(track)) {
+        const tick = Math.floor(performance.now() / 250), flash = tick % 2 ? '#ff4d4d' : '#ffb000';
+        context.setLineDash([]); context.lineWidth = 3; context.strokeStyle = flash;
+        if (tick % 4 !== 3) context.strokeRect(a[0] - 3, a[1] - 3, z[0] - a[0] + 6, z[1] - a[1] + 6);  // box blinks
+        context.font = '600 12px system-ui, sans-serif'; context.shadowColor = '#000000d0'; context.shadowBlur = 3;
+        context.fillStyle = flash; context.fillText(track.person_id + ' · check', a[0], Math.max(r.y + 14, a[1] - 6));
+        context.shadowBlur = 0;
+        continue;
+      }
       const under = possiblyUnder(track);
       const back = cameBack(track);
-      const color = TRACK_COLORS[track.visible ? (back ? 'back' : 'safe') : under ? track.level : 'missing'] ?? TRACK_COLORS.missing;
+      const color = TRACK_COLORS[track.visible ? (blinking(track) ? 'warning' : back ? 'back' : 'safe') : under ? track.level : 'missing'] ?? TRACK_COLORS.missing;
       context.strokeStyle = color; context.fillStyle = color; context.lineWidth = track.visible ? 2 : 1.6;
       context.setLineDash(track.visible ? [] : [5, 4]);
       context.strokeRect(a[0], a[1], z[0] - a[0], z[1] - a[1]);
@@ -102,8 +122,9 @@ function draw() {
         : track.person_id + ' · ' + track.missing_s.toFixed(1) + 's';
       context.font = '600 11px system-ui, sans-serif';
       const w = context.measureText(text).width, y = Math.max(r.y + 14, a[1] - 4);
-      context.fillStyle = '#000000b0'; context.fillRect(a[0] - 2, y - 11, w + 4, 14);
+      context.shadowColor = '#000000d0'; context.shadowBlur = 3; // no label background, just a soft shadow
       context.fillStyle = color; context.fillText(text, a[0], y);
+      context.shadowBlur = 0;
     }
     overlay.dataset.boxCount = detectionTracks.filter(tr => tr.visible).length;
     return;
@@ -113,9 +134,10 @@ function draw() {
     const color = detection.review_severity === 'urgent' ? '#ff8d8d' : detection.review_severity === 'warn' ? '#f0c971' : '#9be6ce';
     context.strokeStyle = color; context.fillStyle = color; context.lineWidth = 1.4;
     context.strokeRect(a[0], a[1], z[0] - a[0], z[1] - a[1]);
-    context.font = '10px monospace';
+    context.font = '600 11px system-ui, sans-serif'; context.shadowColor = '#000000d0'; context.shadowBlur = 3;
     const label = detection.track_id != null ? trackLabel(detection) : detection.confidence === null ? 'person' : Math.round(detection.confidence * 100) + '%';
     context.fillText(label, a[0], Math.max(r.y + 10, a[1] - 3));
+    context.shadowBlur = 0;
   }
   overlay.dataset.boxCount = currentDetections.length;
 }
@@ -175,6 +197,7 @@ async function connect(info, isReference = false) {
   lastJob = past.find(j => j.state === 'completed') ?? null;
   $('last-analysis').hidden = !lastJob;
   if (lastJob) $('last-analysis').textContent = 'Review last analysis · ' + timeLabel(Math.round(lastJob.start)) + '–' + timeLabel(Math.round(lastJob.end));
+  if (lastJob) $('last-analysis').click(); // already analyzed: go straight to the review, skip the pool-area screen
 }
 // New corner goes at the middle of the longest edge; drag it outward to widen the region.
 $('add-corner').onclick = () => {
@@ -273,8 +296,16 @@ async function openReview() {
   }
   await refresh();
 }
+// Demo only: a run can point at a pre-rendered review video (boxes burned in); it plays instead of the live overlay.
+async function useDemoVideo(url) {
+  const t = video.currentTime, ready = once(video, 'loadeddata');
+  video.src = url; video.load(); await ready;
+  video.currentTime = t;
+}
 $('last-analysis').onclick = async () => {
-  try {config = readConfig(); if (corners.length === 4) twin?.configure(config); video.pause(); job = lastJob; cache.clear(); resetReview(); await openReview();}
+  try {config = readConfig(); if (corners.length === 4) twin?.configure(config); video.pause(); job = lastJob; cache.clear(); resetReview();
+    if (job.demo_video) await useDemoVideo(job.demo_video);
+    await openReview();}
   catch (error) {message(error.message);}
 };
 $('review-progress').onclick = () => openReview().catch(e => message(e.message));
@@ -290,8 +321,12 @@ async function refresh() {
 }
 function updateDisplay() {
   if (!source || video.seeking) {clearDisplay(); return;}
+  if (job?.demo_video && phase === 'twin') {currentDetections = []; detectionTracks = null; $('hud').hidden = true; return;}  // boxes are in the video
   const time = video.paused ? video.currentTime : frameTime;
-  const tracked = !importedFrames && reviewAnalysis?.state === 'completed';
+  // Always draw our tracker's green/yellow/red boxes (observation.tracks). Sam's review-analysis replay is only used
+  // when a run has no tracker output of its own.
+  const own = cache.frames(time).some(f => Array.isArray(f.tracks));
+  const tracked = !importedFrames && !own && reviewAnalysis?.state === 'completed';
   const frames = importedFrames ?? (tracked ? trackCache.frames(time) : cache.frames(time));
   const observation = observationAt(frames, time);
   currentTracks = tracked && observation ? observation.tracks : [];
@@ -307,10 +342,12 @@ function updateDisplay() {
   $('pool-count').textContent = observation && mappingValid() ? currentDetections.filter(d => inside(boxAnchor(d.bbox_xyxy_normalized), config.corners)).length : '—';
   $('hud').hidden = !observation;
   $('hud-people').textContent = currentDetections.length;
-  const alerts = (detectionTracks ?? []).filter(tr => possiblyUnder(tr) && ['warning', 'alarm'].includes(tr.level));
+  const alerts = (detectionTracks ?? []).filter(tr => blinking(tr) || possiblyUnder(tr) && ['warning', 'alarm'].includes(tr.level));
+  const flagged = (detectionTracks ?? []).filter(demoFlag);
+  alerts.push(...flagged.filter(tr => !alerts.includes(tr)));
   $('hud-alert').hidden = !alerts.length;
-  $('hud-alert').className = alerts.some(tr => tr.level === 'alarm') ? 'alarm' : 'warning';
-  $('hud-alert').textContent = alerts.map(tr => tr.person_id + ' · ' + tr.missing_s.toFixed(1) + 's').join('   ');
+  $('hud-alert').className = alerts.some(tr => tr.level === 'alarm' || demoFlag(tr)) ? 'alarm' : 'warning';
+  $('hud-alert').textContent = alerts.map(tr => tr.person_id + ' · ' + (demoFlag(tr) ? 'check (flagged manually)' : tr.visible ? 'blinking' : tr.missing_s.toFixed(1) + 's')).join('   ');
   const returns = (detectionTracks ?? []).filter(cameBack);
   $('hud-back').hidden = !returns.length;
   $('hud-back').textContent = returns.map(tr => tr.person_id + ' · back ' + tr.back_after_s.toFixed(1) + 's').join('   ');
@@ -371,8 +408,9 @@ $('export-button').onclick = () => {
   const link = document.createElement('a'); link.href = url; link.download = 'poolside-setup.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 function trackLabel(track) {
-  const state = track.state === 'missing' ? 'lost' : track.state === 'outside' ? 'visible outside' : track.state === 'visible' ? 'visible' : 'unknown';
-  return '#' + track.track_id + ' · ' + state + (track.missing_seconds > 0 ? ' · ' + track.missing_seconds.toFixed(1) + 's missing' : '') + (track.reason ? ' · ' + track.reason.replaceAll('_', ' ') : '');
+  // Short on-video label: just the number, plus time missing when someone is out of sight ("31 · 5.2s").
+  const id = String(track.track_id).replace(/^track-0*/, '') || '0';
+  return id + (track.missing_seconds > 0 ? ' · ' + track.missing_seconds.toFixed(1) + 's' : '');
 }
 function renderTrackStates(frame) {
   const key = frame ? frame.media_time + ':' + frame.quality : 'unavailable';

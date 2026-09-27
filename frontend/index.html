@@ -63,10 +63,10 @@
         <div class="viewer-top"><span><i class="status-dot"></i><b id="viewer-title">REFERENCE / WAVE POOL</b></span><span id="viewer-meta">RECORDED FOOTAGE</span></div>
         <div id="stage" class="stage">
           <div id="video-pane" class="video-pane"><video id="video" preload="auto" playsinline muted></video><canvas id="overlay" aria-label="Pool calibration and person boxes"></canvas><div id="handles"></div><div id="video-empty"><div class="empty-card"><p>No video</p><small>Pick a source from the menu</small></div></div></div>
-          <div id="three-pane" class="three-pane"><canvas id="three-canvas" aria-label="Interactive estimated 3D pool"></canvas><div class="scene-label">Estimated 3D view</div><div class="orbit-hint">Drag to orbit · Scroll to zoom</div><button id="reset-camera" aria-label="Reset 3D camera">⌖</button></div>
+          <div id="three-pane" class="three-pane"><canvas id="three-canvas" aria-label="Interactive estimated 3D pool"></canvas><div class="scene-label">Estimated 3D view</div><div class="orbit-hint">Drag to orbit · Scroll to zoom</div><div class="view-presets"><button data-preset="top">Top</button><button data-preset="front">Front</button><button data-preset="camera">Camera</button></div><button id="reset-camera" aria-label="Reset 3D camera">⌖</button></div>
           <div id="scan-effect" hidden><div class="scan-line"></div><div class="scan-chip"><i></i>Analyzing frames</div></div>
           <div id="zoom-warning" hidden><strong>Camera framing has changed.</strong><span>The water mapping ends here. Recalibrate this segment to continue the 3D view.</span><button id="zoom-recalibrate">Recalibrate segment →</button></div>
-          <div id="hud" class="hud" hidden><strong id="hud-people">0</strong> people detected</div>
+          <div id="hud" class="hud" hidden><strong id="hud-people">0</strong> people detected<div id="hud-alert" hidden></div></div>
         </div>
         <div class="transport"><button id="play-button" aria-label="Play recording" disabled>▶</button><span id="time-current">0:00</span><input id="timeline" aria-label="Seek recording" type="range" min="0" max="129" step="0.01" value="0" disabled><span id="time-total">2:09</span><button id="speed-button" title="Playback speed">1x</button><button id="mute-button" aria-label="Toggle audio">⌁</button></div>
         <div class="viewer-footer"><span id="tracking-status">Awaiting source connection</span><span>RECORDED ANALYSIS <i>↗</i></span></div>

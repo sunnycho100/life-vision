@@ -27,7 +27,7 @@ export class PoolTwin {
     });
     canvas.addEventListener('pointerup', () => drag = null);
     canvas.addEventListener('pointercancel', () => drag = null);
-    canvas.addEventListener('wheel', e => {e.preventDefault(); this.distance = THREE.MathUtils.clamp(this.distance * Math.exp(e.deltaY * .001), this.size * .8, this.size * 6);}, {passive: false});
+    canvas.addEventListener('wheel', e => {e.preventDefault(); this.distance = THREE.MathUtils.clamp(this.distance * Math.exp(e.deltaY * .001), this.size * .5, this.size * 6);}, {passive: false});
     this.resize = new ResizeObserver(() => this.resizeCanvas()); this.resize.observe(canvas);
   }
 
@@ -115,6 +115,18 @@ export class PoolTwin {
     this.target = new THREE.Vector3(x / 2, this.config.water + height / 3, z / 2);
     this.theta = Math.atan2(x, z) - 1.1; this.phi = .62;
     this.distance = Math.max(this.size * 1.95, Math.hypot(x, z, height) * 2.1);
+  }
+  preset(name) { // Top, Front, or from the estimated recording camera
+    const water = this.config.water, {x, z, height, aim} = this.pose;
+    if (name === 'camera') {
+      this.target.set(aim[0], water, aim[1]);
+      const dx = x - aim[0], dz = z - aim[1];
+      this.theta = Math.atan2(dx, dz); this.phi = THREE.MathUtils.clamp(Math.atan2(height, Math.hypot(dx, dz)), .23, 1.35);
+      this.distance = Math.hypot(dx, dz, height) - 2.5 * this.size / 30; // just in front of the lens, not inside the camera model
+    } else {
+      this.target.set(0, water, 0); this.theta = 0;
+      this.phi = name === 'top' ? 1.35 : .3; this.distance = this.size * (name === 'top' ? 1.7 : 1.9);
+    }
   }
   reveal() {this.revealStart = performance.now();}
 

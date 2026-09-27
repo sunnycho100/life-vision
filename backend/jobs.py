@@ -65,13 +65,14 @@ class JobManager:
             if not 0 <= start < end <= source["duration"] + .001:
                 raise ValueError("Analysis interval must fall within this recording.")
             spec = {"schema": "detections/1", "source_id": source["id"], "source_sha256": source["sha256"],
-                    "source": source, "start": start, "end": min(end, source["duration"]), "sample_hz": 5,
+                    "source": source, "start": start, "end": min(end, source["duration"]), "sample_hz": 10,
                     "sampling": "first distinct frame at/after target; source PTS minus stream start",
-                    "stored_threshold": .2, "display_threshold": .5, "tiling": False,
+                    "stored_threshold": .2, "display_threshold": .5,
+                    "tiling": {"grid": [3, 2], "overlap": .25} if self.backend == "python" else False,
                     "model_manifest": model, "model_manifest_sha256": digest(self.manifest_path),
-                    "backend": self.backend, "provider": self.provider, "pipeline_version": 1,
+                    "backend": self.backend, "provider": self.provider, "pipeline_version": 2,
                     "worker_python": self.worker_python}
-            spec["pipeline_sha256"] = {name: code_digest(ROOT / "backend" / name) for name in ["detector.py", "worker.py", "common.py"]}
+            spec["pipeline_sha256"] = {name: code_digest(ROOT / "backend" / name) for name in ["detector.py", "worker.py", "common.py", "tracking.py"]}
             fingerprint = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
             for path in self.root.glob("*/manifest.json"):
                 old = read_json(path)

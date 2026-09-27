@@ -149,3 +149,49 @@ def create_detector(manifest_path, backend="onnx", provider=None):
     if backend == "onnx":
         return OnnxDetector(manifest_path, provider or "CPUExecutionProvider")
     raise ValueError("Unknown detector backend.")
+
+
+class TiledDetector:
+    """Full frame plus a grid of overlapping tiles, in one batched call, merged back to full-frame boxes.
+    Far-away swimmers are too small at 384 px for the whole frame; each tile is seen at higher zoom.
+    Idea from Joanne's model/detect_people_rfdetr_s.py. Python backend only (needs batched predict).
+    ponytail: 3x2 grid costs about 4.5x a single full-frame pass on CPU."""
+
+    def __init__(self, base, grid=(3, 2), overlap=0.25):
+        if not isinstance(base, PythonDetector):
+            raise ValueError("Tiling needs the Python backend (--backend python).")
+        self.base, self.grid, self.overlap = base, tuple(grid), overlap
+        self.manifest, self.runtime = base.manifest, {**base.runtime, "tiling": {"grid": list(grid), "overlap": overlap}}
+
+    def windows(self, w, h):
+        nx, ny = self.grid
+        tw, th = int(w / (nx - (nx - 1) * self.overlap)), int(h / (ny - (ny - 1) * self.overlap))
+        return [(min(int(ix * tw * (1 - self.overlap)), w - tw), min(int(iy * th * (1 - self.overlap)), h - th), tw, th)
+                for iy in range(ny) for ix in range(nx)]
+
+    def predict(self, rgb, threshold=.2):
+        from backend.tracking import clean_boxes
+        h, w = rgb.shape[:2]
+        wins = [(0, 0, w, h)] + self.windows(w, h)
+        results = self.base.model.predict([rgb] + [rgb[y:y + th, x:x + tw] for x, y, tw, th in wins[1:]], threshold=threshold)
+        full, extra = [], []  # full-frame boxes are kept; tiles only add people the full frame missed
+        for i, ((x, y, tw, th), r) in enumerate(zip(wins, results)):
+            keep = r.class_id == self.manifest["person_id"]
+            for b, s in zip(r.xyxy[keep], r.confidence[keep]):
+                box = [(b[0] + x) / w, (b[1] + y) / h, (b[2] + x) / w, (b[3] + y) / h]
+                (extra if i else full).append((box, float(s)))
+
+        def covered(box):  # overlaps a full-frame person (e.g. half of a big swimmer cut at a tile seam)
+            a = (box[2] - box[0]) * (box[3] - box[1])
+            for f, _ in full:
+                ix = max(0, min(box[2], f[2]) - max(box[0], f[0])); iy = max(0, min(box[3], f[3]) - max(box[1], f[1]))
+                if ix * iy > .3 * a:
+                    return True
+            return False
+        extra = [(b, s) for b, s in extra if not covered(b)]
+        pairs = full + extra
+        # Same person seen in several overlapping tiles collapses to one box.
+        boxes, scores = clean_boxes(np.clip(np.asarray([b for b, _ in pairs]).reshape(-1, 4), 0, 1),
+                                    [s for _, s in pairs], nms_iou=.5, inside=.8, part_ratio=1.0)
+        return [{"bbox_xyxy_normalized": [float(v) for v in b], "confidence": float(s), "class_name": "person"}
+                for b, s in zip(boxes, scores) if b[2] > b[0] and b[3] > b[1]]

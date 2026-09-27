@@ -168,3 +168,17 @@ def test_retired_track_does_not_resolve_incident():
 def test_invalid_media_timestamps_are_rejected(observations):
     with pytest.raises(ValueError):
         run(observations)
+
+
+L_POOL = [[.1, .1], [.9, .1], [.9, .5], [.5, .5], [.5, .9], [.1, .9]]
+
+
+def test_six_corner_pool_follows_its_outline():
+    arm, notch = [.2, .6, .3, .8], [.7, .6, .8, .8]  # inside the L, and in its cut-out corner
+    tracks = run([frame(0, [person(arm), person(notch)])], corners=L_POOL)["frames"][0]["tracks"]
+    assert sorted(t["state"] for t in tracks) == ["outside", "visible"]
+
+
+def test_crossed_pool_outline_is_rejected():
+    with pytest.raises(ValueError):
+        run(sequence(1, lambda t: True), corners=[[.1, .1], [.9, .9], [.9, .1], [.1, .9]])

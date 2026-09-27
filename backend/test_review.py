@@ -119,6 +119,13 @@ def test_review_rejects_invalid_evidence_and_config(tmp_path, state, stored_thre
         assert client.post(f'/api/jobs/{JOB_ID}/review-analysis', json=config).status_code in {409, 422}
 
 
+def test_review_accepts_more_than_four_corners(tmp_path):
+    corners = [[.1, .1], [.9, .1], [.9, .5], [.5, .5], [.5, .9], [.1, .9]]
+    with fixture_api(tmp_path) as (client, _):
+        assert client.post(f'/api/jobs/{JOB_ID}/review-analysis', json={**CONFIG, 'corners': corners}).status_code == 202
+        wait_done(client)
+
+
 def test_review_changed_source_has_no_ready_clip(tmp_path):
     with fixture_api(tmp_path, changed=True) as (client, _):
         assert client.post(f'/api/jobs/{JOB_ID}/review-analysis', json=CONFIG).status_code == 202

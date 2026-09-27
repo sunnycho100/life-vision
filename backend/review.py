@@ -16,6 +16,7 @@ from fastapi import HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from backend.common import ROOT, code_digest, digest, read_json, write_json
+from backend.monitoring import _polygon
 
 
 class ReviewRequest(BaseModel):
@@ -37,15 +38,7 @@ class DecisionRequest(BaseModel):
 
 
 def validate_config(config, spec, source):
-    corners = config['corners']
-    if len(corners) != 4 or any(len(p) != 2 or any(not math.isfinite(v) or not 0 <= v <= 1 for v in p) for p in corners):
-        raise ValueError('Use four finite normalized pool corners in perimeter order.')
-    crosses = []
-    for i in range(4):
-        a, b, c = corners[i], corners[(i + 1) % 4], corners[(i + 2) % 4]
-        crosses.append((b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]))
-    if not (all(c > 1e-6 for c in crosses) or all(c < -1e-6 for c in crosses)):
-        raise ValueError('Pool corners must form a nondegenerate convex quadrilateral in perimeter order.')
+    _polygon(config['corners'])
     if not spec['start'] <= config['start'] < config['end'] <= min(spec['end'], source['duration']) + 1e-6:
         raise ValueError('Review interval must be within the completed job and recording.')
     if not config['low_threshold'] <= config['high_threshold'] <= config['new_track_threshold']:

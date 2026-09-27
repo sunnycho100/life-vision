@@ -5,8 +5,8 @@ import time
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-from backend.common import digest, probe, sampled_frames, read_json, write_json
-from backend.detector import preprocess, decode
+from backend.common import ROOT, digest, probe, sampled_frames, read_json, write_json
+from backend.detector import preprocess, decode, load_manifest, create_detector
 from backend.jobs import JobManager, observation_db
 from backend.serve import create_app
 
@@ -150,3 +150,28 @@ def test_observation_window_empty_is_not_missing_and_more_than_100(tmp_path):
     assert [len(row["detections"]) for row in rows] == [150, 0]
     assert manager.observations("a" * 32, 2, 3) == []
     with pytest.raises(ValueError): manager.observations("a" * 32, 0, 60)
+
+
+def test_manifest_accepts_fine_tuned_small_and_rejects_unknown_models(tmp_path):
+    path = tmp_path / "model.json"
+    small = {"model": "RFDETRSmall", "rfdetr_version": "1.11.0", "resolution": 512, "precision": "fp32",
+             "person_id": 0, "num_classes": 1, "background_id": None, "num_select": 300}
+    write_json(path, small)
+    assert load_manifest(path)["person_id"] == 0
+    for bad in [{"model": "RFDETRLarge"}, {"resolution": 384}, {"person_id": -1}]:
+        write_json(path, {**small, **bad})
+        with pytest.raises(ValueError):
+            load_manifest(path)
+
+
+FINE_TUNED = ROOT / "artifacts/models/rfdetr-s-person-v1/manifest.json"
+
+
+@pytest.mark.skipif(not FINE_TUNED.is_file(), reason="Joanne's fine-tuned weights are not on this machine")
+def test_fine_tuned_small_detects_people_on_gpu():
+    import torch
+    provider = "mps" if torch.backends.mps.is_available() else "cpu"
+    rgb = np.full((360, 640, 3), 90, np.uint8)
+    detector = create_detector(FINE_TUNED, "python", provider)
+    assert detector.runtime["provider"] == provider
+    assert all(d["class_name"] == "person" for d in detector.predict(rgb))

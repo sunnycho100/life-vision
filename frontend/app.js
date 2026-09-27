@@ -1,9 +1,9 @@
-﻿import {validQuad, homography, project, inside, boxAnchor, timeLabel, parseTracking, observationAt, ObservationCache} from './core.mjs';
+﻿import {validQuad, validPolygon, homography, project, inside, boxAnchor, timeLabel, parseTracking, observationAt, ObservationCache} from './core.mjs';
 
 const $ = id => document.getElementById(id);
 const video = $('video'), stage = $('stage'), overlay = $('overlay'), context = overlay.getContext('2d');
 const panels = ['source', 'calibrate', 'scan', 'twin'];
-let phase = 'source', corners = [[.085, .08], [.95, .14], [.96, .91], [.22, .91]];
+let phase = 'source', corners = [[.01, .01], [.99, .01], [.99, .99], [.01, .99]];
 let source = null, reference, config = null, job = null, lastJob = null, twin = null, importedFrames = null;
 let sourceGeneration = 0, frameTime = 0, currentDetections = [], threshold = .2, refreshPending = false, pollBusy = false;
 let reviewAnalysis = null, reviewBusy = false, reviewSubmitting = false, incidents = [], selectedIncident = null, currentTracks = [], trackRenderKey = '';
@@ -98,8 +98,8 @@ function draw() {
       context.setLineDash([]);
       if (!track.visible && (!under || track.level === 'safe')) continue; // dashed outline only; label once missing 1 s+ in the pool
       const text = track.visible
-        ? track.person_id + (back ? ' · back after ' + track.back_after_s.toFixed(1) + 's' : '')
-        : 'Person ' + track.person_id + ' · possibly under water ' + track.missing_s.toFixed(1) + 's';
+        ? track.person_id + (back ? ' · back ' + track.back_after_s.toFixed(1) + 's' : '')
+        : track.person_id + ' · ' + track.missing_s.toFixed(1) + 's';
       context.font = '600 11px system-ui, sans-serif';
       const w = context.measureText(text).width, y = Math.max(r.y + 14, a[1] - 4);
       context.fillStyle = '#000000b0'; context.fillRect(a[0] - 2, y - 11, w + 4, 14);
@@ -119,7 +119,12 @@ function draw() {
   }
   overlay.dataset.boxCount = currentDetections.length;
 }
-for (let i = 0; i < 4; i++) {
+function renderHandles() { // rebuilt whenever the corner count changes, so indices stay in order
+  $('handles').replaceChildren(); handles.length = 0;
+  corners.forEach((_, i) => addHandle(i));
+  $('remove-corner').disabled = corners.length <= 4;
+}
+function addHandle(i) {
   const button = document.createElement('button'); button.className = 'corner'; button.textContent = i + 1;
   button.setAttribute('aria-label', 'Water reference corner ' + (i + 1) + '; use arrow keys to adjust');
   let dragging = false;
@@ -158,7 +163,8 @@ async function connect(info, isReference = false) {
   $('analysis-start').value = 0; $('analysis-end').value = Math.min(info.duration, video.duration);
   $('viewer-title').textContent = isReference ? 'REFERENCE / WAVE POOL' : 'UPLOADED RECORDING';
   $('viewer-meta').textContent = info.width + ' × ' + info.height + ' · RECORDED';
-  corners = isReference ? [[.085, .08], [.95, .14], [.96, .91], [.22, .91]] : [[.15, .2], [.85, .2], [.9, .85], [.1, .85]];
+  corners = [[.01, .01], [.99, .01], [.99, .99], [.01, .99]]; // start end to end; drag the corners in if the pool doesn't fill the frame
+  renderHandles();
   $('measured-plane').checked = false;
   const target = Math.min(isReference ? 8 : .1, video.duration / 2);
   if (Math.abs(video.currentTime - target) > .001) {const seeked = once(video, 'seeked'); video.currentTime = target; await seeked;}
@@ -170,6 +176,14 @@ async function connect(info, isReference = false) {
   $('last-analysis').hidden = !lastJob;
   if (lastJob) $('last-analysis').textContent = 'Review last analysis · ' + timeLabel(Math.round(lastJob.start)) + '–' + timeLabel(Math.round(lastJob.end));
 }
+// New corner goes at the middle of the longest edge; drag it outward to widen the region.
+$('add-corner').onclick = () => {
+  const edge = k => Math.hypot(...corners[k].map((v, j) => v - corners[(k + 1) % corners.length][j]));
+  const i = corners.reduce((best, _, k) => edge(k) > edge(best) ? k : best, 0), next = corners[(i + 1) % corners.length];
+  corners.splice(i + 1, 0, corners[i].map((v, j) => (v + next[j]) / 2)); renderHandles();
+};
+$('remove-corner').onclick = () => {if (corners.length > 4) {corners.pop(); renderHandles();}};
+renderHandles();
 $('reference-button').onclick = () => connect(reference, true).catch(e => message(e.message));
 $('video-file').onchange = async e => {
   const file = e.target.files[0]; if (!file) return;
@@ -188,7 +202,7 @@ $('back-button').onclick = async () => {
 };
 function readConfig() {
   const width = Number($('pool-width').value), length = Number($('pool-length').value), depth = Number($('pool-depth').value), water = Number($('water-height').value), end = Number($('mapping-end').value);
-  if (!validQuad(corners)) throw Error('Place four separated corners clockwise around a convex water region.');
+  if (corners.length === 4 ? !validQuad(corners) : !validPolygon(corners)) throw Error(corners.length === 4 ? 'Place four separated corners clockwise around a convex water region.' : 'Move the corners so the outline edges do not cross.');
   if (![width, length, depth, water, end].every(Number.isFinite) || width < 2 || width > 100 || length < 2 || length > 100 || depth < .3 || depth > 10 || water < .1 || water > depth) throw Error('Use a water height above zero and no higher than the wall; width/length 2–100 m and wall height 0.3–10 m.');
   if (end <= video.currentTime + .05 || end > video.duration + .1) throw Error('Mapping end must be after the current frame and within the recording.');
   if (source.sha256 === reference?.sha256 && source.mapping_end < source.duration && video.currentTime < source.mapping_end && end > source.mapping_end) throw Error('End this mapping before the reference camera view changes.');
@@ -196,7 +210,7 @@ function readConfig() {
 }
 $('scan-button').onclick = async () => {
   try {
-    config = readConfig(); twin?.configure(config); showPosition(null); $('calibration-kind').textContent = config.measured ? 'User-measured plane' : 'Approximate'; video.pause();
+    config = readConfig(); if (corners.length === 4) twin?.configure(config); showPosition(null); $('calibration-kind').textContent = config.measured ? 'User-measured plane' : 'Approximate'; video.pause();
     if (job || importedFrames) {setPhase('twin'); await setView('video'); await refresh(); return;}
     const start = Number($('analysis-start').value), end = Number($('analysis-end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > source.duration + .001) throw Error('Set an analysis interval within the recording.');
@@ -214,7 +228,7 @@ function showJob() {
   $('scan-status').textContent = details; $('job-status').textContent = details;
   $('scan-progress-bar').style.width = pct + '%';
   $('scan-geometry').textContent = '✓ Pool outline saved';
-  $('scan-model').textContent = 'RF-DETR Nano · ' + (job.runtime?.provider ?? job.backend);
+  $('scan-model').textContent = (job.model ?? 'RF-DETR Nano') + ' · ' + (job.runtime?.provider ?? job.backend);
   $('scan-detections').textContent = job.frames_analyzed + ' frames analyzed';
   $('delegate').textContent = job.runtime?.provider ?? job.backend;
   $('cancel-job').hidden = !running; $('cancel-scan').disabled = !running;
@@ -260,7 +274,7 @@ async function openReview() {
   await refresh();
 }
 $('last-analysis').onclick = async () => {
-  try {config = readConfig(); twin?.configure(config); video.pause(); job = lastJob; cache.clear(); resetReview(); await openReview();}
+  try {config = readConfig(); if (corners.length === 4) twin?.configure(config); video.pause(); job = lastJob; cache.clear(); resetReview(); await openReview();}
   catch (error) {message(error.message);}
 };
 $('review-progress').onclick = () => openReview().catch(e => message(e.message));
@@ -296,12 +310,12 @@ function updateDisplay() {
   const alerts = (detectionTracks ?? []).filter(tr => possiblyUnder(tr) && ['warning', 'alarm'].includes(tr.level));
   $('hud-alert').hidden = !alerts.length;
   $('hud-alert').className = alerts.some(tr => tr.level === 'alarm') ? 'alarm' : 'warning';
-  $('hud-alert').textContent = alerts.map(tr => 'Person ' + tr.person_id + ' possibly under water ' + Math.floor(tr.missing_s) + 's').join(' · ');
+  $('hud-alert').textContent = alerts.map(tr => tr.person_id + ' · ' + tr.missing_s.toFixed(1) + 's').join('   ');
   const returns = (detectionTracks ?? []).filter(cameBack);
   $('hud-back').hidden = !returns.length;
-  $('hud-back').textContent = returns.map(tr => 'Person ' + tr.person_id + ' back after ' + tr.back_after_s.toFixed(1) + 's').join(' · ');
+  $('hud-back').textContent = returns.map(tr => tr.person_id + ' · back ' + tr.back_after_s.toFixed(1) + 's').join('   ');
   if (phase === 'twin' || phase === 'scan') $('tracking-status').textContent = observation
-    ? currentDetections.length + ' person boxes · ' + (importedFrames ? 'imported observations' : tracked ? 'persistent track replay' : 'RF-DETR Nano') + (mappingValid() ? '' : ' · pool outline needs calibration')
+    ? currentDetections.length + ' person boxes · ' + (importedFrames ? 'imported observations' : tracked ? 'persistent track replay' : job?.model ?? 'RF-DETR Nano') + (mappingValid() ? '' : ' · pool outline needs calibration')
     : 'Analysis unavailable at this time';
   if (twin && stage.dataset.view !== 'video') twin.updatePeople(mappingValid() ? currentDetections : []);
   $('zoom-warning').hidden = stage.dataset.view === 'video' || !config || mappingValid();
@@ -311,6 +325,7 @@ async function setView(view) {
   if (view !== 'video') {
     try {
       if (!config) throw Error('Map the pool before opening the optional 3D view.');
+      if (config.corners.length !== 4) throw Error('the 3D view needs exactly 4 corners.');
       if (!twin) {const {PoolTwin} = await import('./twin.js'); twin = new PoolTwin($('three-canvas'), video, showPosition);}
       twin.configure(config);
     } catch (error) {message('3D view unavailable: ' + error.message); view = 'video';}
@@ -351,7 +366,7 @@ $('tracking-file').onchange = async e => {
 };
 $('resume-inference').onclick = () => {importedFrames = null; $('resume-inference').hidden = true; showJob(); refresh();};
 $('export-button').onclick = () => {
-  const data = {schema: 'poolside-setup/2', source_sha256: source.sha256, model: 'RF-DETR Nano', job_id: job?.id ?? null, confidence: threshold, membership_anchor: 'bottom-center', mapping: config};
+  const data = {schema: 'poolside-setup/2', source_sha256: source.sha256, model: job?.model ?? 'RF-DETR Nano', job_id: job?.id ?? null, confidence: threshold, membership_anchor: 'bottom-center', mapping: config};
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
   const link = document.createElement('a'); link.href = url; link.download = 'poolside-setup.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
@@ -492,6 +507,13 @@ setInterval(() => {pollJob(); refresh();}, 500);
 setInterval(pollReview, 2000);
 try {
   reference = await api('/api/reference'); $('reference-button').disabled = !reference.available;
+  for (const preset of await api('/api/presets')) { // extra local recordings, listed under the reference
+    const button = document.createElement('button'); button.className = 'source-row';
+    button.innerHTML = '<strong></strong><small></small>';
+    button.querySelector('strong').textContent = preset.label; button.querySelector('small').textContent = timeLabel(preset.duration) + ' · MP4';
+    button.onclick = () => connect(preset).catch(e => message(e.message));
+    $('reference-button').after(button);
+  }
   const health = await api('/api/health');
   if (!health.model_manifest_available) message(health.message);
 } catch (error) {message('Server unavailable: ' + error.message);}

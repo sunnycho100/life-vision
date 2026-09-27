@@ -22,24 +22,24 @@
     <div class="workspace">
       <aside id="setup-panel" class="setup-panel">
         <section id="source-panel">
-          <h2>Source</h2><p>Fixed camera, clear view of the water.</p>
-          <button id="reference-button" class="source-card" disabled><strong>Wave pool recording</strong><small>2:09 · YouTube reference</small></button>
-          <a class="source-link" href="https://www.youtube.com/watch?v=PuAfTA2wf7o" target="_blank" rel="noreferrer">View original on YouTube</a>
-          <div class="or">or</div>
-          <label class="upload-zone" for="video-file"><strong>Upload a video</strong><small>MP4 or WebM</small></label><input id="video-file" type="file" accept="video/mp4,video/webm" hidden>
-          <p class="note">Counts may include missed or duplicate people.</p>
+          <h2>Source</h2>
+          <div class="source-list">
+            <button id="reference-button" class="source-row" disabled><strong>Wave pool recording</strong><small>2:09 · YouTube</small></button>
+            <label class="source-row" for="video-file"><strong>Upload video</strong><small>MP4 or WebM</small></label><input id="video-file" type="file" accept="video/mp4,video/webm" hidden>
+          </div>
+          <a class="source-link" href="https://www.youtube.com/watch?v=PuAfTA2wf7o" target="_blank" rel="noreferrer">Original on YouTube</a>
         </section>
         <section id="calibrate-panel" hidden>
-          <h2>Pool area</h2><p>Drag the four markers around a rectangular patch of water. Start at the far left and go clockwise.</p>
-          <div class="calibration-note">Use four points on the same water plane: 1→2 is width, 1→4 is length. The reference markers and dimensions are approximate.</div>
-          <label class="micro"><input id="measured-plane" type="checkbox"> I entered measured dimensions and matching rectangular water-plane corners.</label>
+          <h2>Pool area</h2><p>Drag the four markers around a rectangular patch of water. Start at the far left and go clockwise. Add corners to cover more of the pool; the 3D view needs exactly four.</p>
+          <div class="corner-actions"><button id="add-corner" class="secondary">Add corner</button><button id="remove-corner" class="text-button">Remove last corner</button></div>
+          <input id="measured-plane" type="checkbox" hidden>
           <div class="field-grid"><label>Width <span>m</span><input id="pool-width" type="number" min="2" max="100" step="0.5" value="20"></label><label>Length <span>m</span><input id="pool-length" type="number" min="2" max="100" step="0.5" value="30"></label><label>Wall height <span>m</span><input id="pool-depth" type="number" min="0.3" max="10" step="0.1" value="1.5"></label><label>Water height <span>m</span><input id="water-height" type="number" min="0.1" max="10" step="0.1" value="1.1"></label></div>
 <button id="scan-button" class="primary">Analyze recording</button><button id="last-analysis" class="secondary" hidden>Review last analysis</button><details class="more-settings"><summary>Time settings</summary>
           <p class="micro">Analyzes the whole video by default.</p>
           <div class="field-grid"><label>Analyze from <span>seconds</span><input id="analysis-start" type="number" min="0" step="0.2" value="0"></label><label>Analyze until <span>seconds</span><input id="analysis-end" type="number" min="0.2" step="0.2"></label></div>
           <label class="field-label">Mapping valid until <span>seconds</span><input id="mapping-end" type="number" min="1" step="1" value="95"></label>
           <p class="micro">Mapping starts at this frame. Stop before the reference zoom at 1:35, or before any camera movement in your own clip.</p>
-          </details><button id="calibration-import" class="text-button">Import box results</button><button id="back-button" class="text-button">Change video</button>
+          </details><button id="calibration-import" class="text-button">Import existing box results</button><button id="back-button" class="text-button">← Change recording</button>
         </section>
         <section id="scan-panel" hidden>
           <h2>Analysis</h2><p>Running on the server. You can review results while it runs.</p>
@@ -86,9 +86,9 @@
       <section class="viewer-area" aria-label="Video and digital twin">
         <div class="viewer-top"><span><i class="status-dot"></i><b id="viewer-title">REFERENCE / WAVE POOL</b></span><span id="viewer-meta">RECORDED FOOTAGE</span></div>
         <div id="stage" class="stage">
-          <div id="video-pane" class="video-pane"><video id="video" preload="auto" playsinline muted></video><canvas id="overlay" aria-label="Pool calibration and person boxes"></canvas><div id="handles"></div><div id="video-empty"><div class="empty-card"><p>No video</p><small>Pick a source from the menu</small></div></div></div>
+          <div id="video-pane" class="video-pane"><video id="video" preload="auto" playsinline muted></video><canvas id="overlay" aria-label="Pool calibration and person boxes"></canvas><div id="handles"></div><div id="video-empty"><p>No video</p><small>Pick a source from the menu</small></div></div>
           <div id="three-pane" class="three-pane"><canvas id="three-canvas" aria-label="Interactive estimated 3D pool"></canvas><div class="scene-label">Water-plane position estimates</div><div class="orbit-hint">Drag to orbit · Scroll to zoom · Select a marker</div><div class="view-presets"><button data-preset="top">Top</button><button data-preset="front">Front</button><button data-preset="camera">Camera</button></div><button id="reset-camera" aria-label="Reset 3D camera">⌖</button></div>
-          <div id="scan-effect" hidden><div class="scan-line"></div><div class="scan-chip"><i></i>Analyzing frames</div></div>
+          <div id="scan-effect" hidden><div class="scan-line"></div><div class="scan-chip"><i></i> ANALYZING RECORDED FRAMES</div></div>
           <div id="zoom-warning" hidden><strong>Camera framing has changed.</strong><span>The water mapping ends here. Recalibrate this segment to continue the 3D view.</span><button id="zoom-recalibrate">Recalibrate segment →</button></div>
           <div id="hud" class="hud" hidden><strong id="hud-people">0</strong> people detected<div id="hud-alert" hidden></div><div id="hud-back" hidden></div></div>
         </div>

@@ -33,3 +33,14 @@ def test_webm_mime(tmp_path):
     video = tmp_path / "reference.webm"
     video.write_bytes(b"test fixture")
     assert TestClient(create_app(video, data_dir=tmp_path / "storage")).get("/media/reference").headers["content-type"] == "video/webm"
+
+
+def test_extra_videos_are_listed_as_presets(tmp_path):
+    import subprocess
+    clip = tmp_path / "rescue.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=10:duration=2",
+                    "-pix_fmt", "yuv420p", "-c:v", "libx264", str(clip)], check=True)
+    client = TestClient(create_app(None, data_dir=tmp_path / "storage", extra_videos=[(clip, "Lifeguard rescue")]))
+    [preset] = client.get("/api/presets").json()
+    assert preset["label"] == "Lifeguard rescue" and preset["mapping_end"] == preset["duration"]
+    assert client.get(preset["url"]).content == clip.read_bytes()

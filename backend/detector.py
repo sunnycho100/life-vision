@@ -1,4 +1,4 @@
-"""RF-DETR Nano adapters. Full-frame detection, no tracker and no NMS.
+"""RF-DETR adapters (stock Nano, or a fine-tuned Small via the Python backend). Full-frame detection, no tracker and no NMS.
 
 Contract checked against rfdetr 1.11.0 official predict/export implementation.
 The NumPy resize implements bilinear half-pixel centers, antialias=False.
@@ -10,6 +10,7 @@ import numpy as np
 from backend.common import digest, read_json, code_digest
 
 RF_VERSION = "1.11.0"
+MODELS = {"RFDETRNano": 384, "RFDETRSmall": 512}  # native resolution of each supported size
 MEAN = np.array([.485, .456, .406], dtype=np.float32)[:, None, None]
 STD = np.array([.229, .224, .225], dtype=np.float32)[:, None, None]
 
@@ -69,9 +70,9 @@ def decode(boxes, logits, threshold=.2, person_id=1, num_select=300, background_
 def load_manifest(path):
     path = Path(path).resolve()
     m = read_json(path)
-    if m.get("rfdetr_version") != RF_VERSION or m.get("model") != "RFDETRNano" or m.get("resolution") != 384:
-        raise ValueError("Expected pinned RF-DETR Nano 1.11.0, 384 × 384 manifest.")
-    if m.get("precision") != "fp32" or m.get("person_id") != 1 or m.get("background_id") is not None:
+    if m.get("rfdetr_version") != RF_VERSION or MODELS.get(m.get("model")) != m.get("resolution"):
+        raise ValueError("Expected pinned RF-DETR 1.11.0: Nano at 384 px or Small at 512 px.")
+    if m.get("precision") != "fp32" or not isinstance(m.get("person_id"), int) or m["person_id"] < 0 or m.get("background_id") is not None:
         raise ValueError("Unsupported checkpoint precision or class layout.")
     if m.get("num_select") != 300:
         raise ValueError("Unexpected query selection configuration.")
@@ -116,17 +117,20 @@ class OnnxDetector:
 class PythonDetector:
     def __init__(self, manifest_path, provider="cpu"):
         import torch
-        from rfdetr import RFDETRNano
+        import rfdetr
         from rfdetr.assets.coco_classes import COCO_CLASSES
         if version("rfdetr") != RF_VERSION:
             raise ValueError("Install rfdetr==1.11.0 in the reference environment.")
         self.manifest = load_manifest(manifest_path)
         artifact = self.manifest["checkpoint"]
         weights = Path(manifest_path).parent / artifact["file"]
-        if digest(weights) != artifact["sha256"] or COCO_CLASSES[self.manifest["person_id"]] != "person":
+        # Stock checkpoints use COCO ids; a fine-tuned one names its own classes (Joanne's: person is 0).
+        names = self.manifest.get("class_names") or COCO_CLASSES
+        if digest(weights) != artifact["sha256"] or names.get(self.manifest["person_id"], names.get(str(self.manifest["person_id"]))) != "person":
             raise ValueError("Checkpoint checksum or person class mapping mismatch.")
         torch.set_num_threads(4)
-        self.model = RFDETRNano(pretrain_weights=str(weights.resolve()), device=provider)
+        extra = {"num_classes": self.manifest["num_classes"]} if "num_classes" in self.manifest else {}
+        self.model = getattr(rfdetr, self.manifest["model"])(pretrain_weights=str(weights.resolve()), device=provider, **extra)
         self.runtime = {"backend": "python", "torch": torch.__version__, "rfdetr": RF_VERSION, "provider": provider}
 
     def predict(self, rgb, threshold=.2):
@@ -145,7 +149,8 @@ class PythonDetector:
 
 def create_detector(manifest_path, backend="onnx", provider=None):
     if backend == "python":
-        return PythonDetector(manifest_path, provider or "cpu")
+        import torch
+        return PythonDetector(manifest_path, provider or ("mps" if torch.backends.mps.is_available() else "cpu"))
     if backend == "onnx":
         return OnnxDetector(manifest_path, provider or "CPUExecutionProvider")
     raise ValueError("Unknown detector backend.")

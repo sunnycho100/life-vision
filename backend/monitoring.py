@@ -23,24 +23,33 @@ def _iou(a, b):
     return area / union if union else 0.
 
 
-def _quad(corners):
+def _polygon(corners):
+    """4+ normalized corners in perimeter order; concave is fine, crossing edges are not."""
     if corners is None:
         return None
-    if len(corners) != 4 or any(len(p) != 2 or any(not math.isfinite(v) or not 0 <= v <= 1 for v in p) for p in corners):
-        raise ValueError("Pool corners must be four normalized points.")
-    crosses = []
-    for i in range(4):
-        a, b, c = corners[i], corners[(i + 1) % 4], corners[(i + 2) % 4]
-        crosses.append((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]))
-    if not all(v > 1e-8 for v in crosses):
-        raise ValueError("Pool corners must form a convex clockwise quadrilateral in image coordinates.")
+    n = len(corners)
+    if n < 4 or any(len(p) != 2 or any(not math.isfinite(v) or not 0 <= v <= 1 for v in p) for p in corners):
+        raise ValueError("Pool corners must be at least four normalized points.")
+    side = lambda a, b, c: (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+    for i in range(n):
+        for j in range(i + 2, n):
+            if i == 0 and j == n - 1:
+                continue  # these edges share the closing corner
+            a, b, c, d = corners[i], corners[(i + 1) % n], corners[j], corners[(j + 1) % n]
+            if side(a, b, c) * side(a, b, d) < 0 and side(c, d, a) * side(c, d, b) < 0:
+                raise ValueError("Pool outline edges must not cross.")
+    if abs(sum(a[0] * b[1] - a[1] * b[0] for a, b in zip(corners, corners[1:] + corners[:1]))) / 2 < 1e-6:
+        raise ValueError("Pool outline has no area.")
     return corners
 
 
 def _inside(box, corners):
     x, y = _center(box)
-    return all((b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]) >= -1e-9
-               for a, b in zip(corners, corners[1:] + corners[:1]))
+    hit = False  # even-odd ray cast, so concave outlines work
+    for a, b in zip(corners, corners[1:] + corners[:1]):
+        if (a[1] > y) != (b[1] > y) and x < a[0] + (y - a[1]) * (b[0] - a[0]) / (b[1] - a[1]):
+            hit = not hit
+    return hit
 
 
 def _detections(raw, threshold):
@@ -123,7 +132,7 @@ def process_observations(observations, config):
         raise ValueError("Confidence thresholds must be ordered between zero and one.")
     if cfg["urgent_seconds"] < cfg["warn_seconds"] or cfg["max_gap_seconds"] <= 0 or cfg["retire_seconds"] < cfg["max_gap_seconds"]:
         raise ValueError("Invalid timing thresholds.")
-    corners = _quad(cfg.get("corners"))
+    corners = _polygon(cfg.get("corners"))
     start, end = cfg.get("start", 0.), cfg.get("end", float("inf"))
     if not math.isfinite(start) or start < 0 or end <= start or math.isnan(end):
         raise ValueError("Invalid mapping interval.")

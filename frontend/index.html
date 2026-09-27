@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1519">
+  <title>Poolside - person detection</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1519'/%3E%3Ctext x='4' y='26' font-size='32' fill='%239be6ce'%3E≈%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Poolside home"><span class="brand-mark">≈</span> poolside<span class="brand-dot">.</span></a>
+    <div class="workspace-label">RECORDED VIDEO <span>/</span> NEW SPACE</div>
+    <span class="privacy"><i></i> Server processing</span>
+  </header>
+  <main>
+    <div class="heading"><div><div class="eyebrow">PERSON DETECTION / RF-DETR NANO</div><h1>See the people in your pool.</h1><p>Upload a recording, analyze it, and review person detections in sync with the video.</p></div><span class="edition">PROTOTYPE <b>01</b></span></div>
+    <nav class="steps" aria-label="Setup progress">
+      <div class="step active" data-step="source"><span>01</span> Connect footage</div><div class="step" data-step="calibrate"><span>02</span> Define your space</div><div class="step" data-step="scan"><span>03</span> Analyze recording</div><div class="step" data-step="twin"><span>04</span> Review</div>
+    </nav>
+    <div class="workspace">
+      <aside class="setup-panel">
+        <section id="source-panel">
+          <div class="section-kicker">01 / SOURCE</div><h2>Start with a view.</h2><p>Use a fixed camera recording with a clear view of the water.</p>
+          <button id="reference-button" class="source-card" disabled><span class="source-icon">▷</span><span><strong>Wave pool recording</strong><small>2:09 · YouTube reference</small></span><span class="arrow">↗</span></button>
+          <a class="source-link" href="https://www.youtube.com/watch?v=PuAfTA2wf7o" target="_blank" rel="noreferrer">View original recording ↗</a>
+          <div class="or"><span>OR BRING YOUR OWN</span></div>
+          <label class="upload-zone" for="video-file"><span>＋</span><strong>Choose a video</strong><small>MP4 or WebM - uploads to this server</small></label><input id="video-file" type="file" accept="video/mp4,video/webm" hidden>
+          <div class="note"><span class="note-icon">◎</span><p>RF-DETR Nano detects visible people. Counts may include misses and duplicates.</p></div>
+        </section>
+        <section id="calibrate-panel" hidden>
+          <div class="section-kicker">02 / SPACE</div><h2>Give the water a shape.</h2><p>Drag the four markers around a rectangular patch of water. Start at the far left and go clockwise.</p>
+          <div class="calibration-note">The reference markers approximate the visible region, not the entire pool.</div>
+          <div class="field-grid"><label>Width <span>m</span><input id="pool-width" type="number" min="2" max="100" step="0.5" value="20"></label><label>Length <span>m</span><input id="pool-length" type="number" min="2" max="100" step="0.5" value="30"></label><label>Wall height <span>m</span><input id="pool-depth" type="number" min="0.3" max="10" step="0.1" value="1.5"></label><label>Water height <span>m</span><input id="water-height" type="number" min="0.1" max="10" step="0.1" value="1.1"></label></div>
+          <label class="field-label">Mapping valid until <span>seconds</span><input id="mapping-end" type="number" min="1" step="1" value="95"></label>
+          <p class="micro">Mapping starts at this frame. Stop before the reference zoom at 1:35, or before any camera movement in your own clip.</p>
+          <div class="field-grid"><label>Analyze from <span>seconds</span><input id="analysis-start" type="number" min="0" step="0.2" value="0"></label><label>Analyze until <span>seconds</span><input id="analysis-end" type="number" min="0.2" step="0.2"></label></div><button id="scan-button" class="primary">Analyze recording</button><button id="calibration-import" class="text-button">Import existing box results</button><button id="back-button" class="text-button">← Change recording</button>
+        </section>
+        <section id="scan-panel" hidden>
+          <div class="section-kicker">03 / ANALYSIS</div><h2>Reading the<br>recording.</h2><p>The server analyzes video frames in the background. Review available results while it runs.</p>
+          <div class="scan-log"><div id="scan-geometry">○ Mapping reference plane</div><div id="scan-model">○ Loading vision model</div><div id="scan-detections">○ Detecting visible people</div></div>
+          <div class="scan-progress"><div id="scan-progress-bar"></div></div><p id="scan-status" class="micro" aria-live="polite">Preparing your space…</p>
+          <button id="review-progress" class="secondary">Review available results</button><button id="cancel-scan" class="text-button">Cancel analysis</button>
+        </section>
+        <section id="twin-panel" hidden>
+          <div class="section-kicker">04 / DETECTION REVIEW</div><h2>Review what<br>the model sees.</h2><p>Person boxes follow the analyzed frames. Confidence is a detection score, not a measure of safety.</p>
+          <div class="stat-grid"><div><strong id="person-count">0</strong><span>person boxes - entire frame</span></div><div><strong id="inference-time">—</strong><span>inference / ms</span></div></div>
+          <div class="view-switch" role="group" aria-label="View"><button data-view="video" class="selected">Footage</button><button data-view="split">Both</button><button data-view="twin">Digital twin</button></div>
+          <div class="twin-details"><div><span>Water region</span><b id="region-size">20 × 30 m</b></div><div><span>Geometry</span><b>Estimated</b></div><div><span>Inside outline - estimated</span><b id="pool-count">&mdash;</b></div><div><span>Processing</span><b id="delegate">Starting</b></div></div>
+          <label class="field-label">Display confidence <span id="threshold-value">0.50</span><input id="confidence" type="range" min="0.2" max="0.95" step="0.01" value="0.5"></label><p id="job-status" class="micro" aria-live="polite"></p><button id="cancel-job" class="text-button" hidden>Cancel analysis</button><button id="recalibrate-button" class="secondary">Adjust pool mapping <span>↗</span></button>
+          <button id="export-button" class="text-button">↓ Export setup</button>
+          <button id="tracking-button" class="text-button">↑ Import existing box results</button><input id="tracking-file" type="file" accept=".json,application/json" hidden>
+          <button id="resume-inference" class="text-button" hidden>Return to server results</button>
+          <p class="micro">No identity tracking or drowning classification in this version. Pool membership and 3D positions are approximate.</p>
+        </section>
+        <div id="message" role="status" aria-live="polite" hidden></div>
+      </aside>
+      <section class="viewer-area" aria-label="Video and digital twin">
+        <div class="viewer-top"><span><i class="status-dot"></i><b id="viewer-title">REFERENCE / WAVE POOL</b></span><span id="viewer-meta">RECORDED FOOTAGE</span></div>
+        <div id="stage" class="stage">
+          <div id="video-pane" class="video-pane"><video id="video" preload="auto" playsinline muted></video><canvas id="overlay" aria-label="Pool calibration and person boxes"></canvas><div id="handles"></div><div id="video-empty"><span>◎</span><p>Your space starts here</p><small>Connect the reference or choose a recording</small></div></div>
+          <div id="three-pane" class="three-pane"><canvas id="three-canvas" aria-label="Interactive estimated 3D pool"></canvas><div class="scene-label">ESTIMATED SPATIAL VIEW</div><div class="orbit-hint">Drag to orbit · Scroll to zoom</div><button id="reset-camera" aria-label="Reset 3D camera">⌖</button></div>
+          <div id="scan-effect" hidden><div class="scan-line"></div><div class="scan-chip"><i></i> ANALYZING RECORDED FRAMES</div></div>
+          <div id="zoom-warning" hidden><strong>Camera framing has changed.</strong><span>The water mapping ends here. Recalibrate this segment to continue the 3D view.</span><button id="zoom-recalibrate">Recalibrate segment →</button></div>
+          <span id="view-badge" class="view-badge">CAMERA 01</span>
+        </div>
+        <div class="transport"><button id="play-button" aria-label="Play recording" disabled>▶</button><span id="time-current">0:00</span><input id="timeline" aria-label="Seek recording" type="range" min="0" max="129" step="0.01" value="0" disabled><span id="time-total">2:09</span><button id="speed-button" title="Playback speed">1x</button><button id="mute-button" aria-label="Toggle audio">⌁</button></div>
+        <div class="viewer-footer"><span id="tracking-status">Awaiting source connection</span><span>RECORDED ANALYSIS <i>↗</i></span></div>
+      </section>
+    </div>
+    <footer><span><i></i> Video is processed and stored on the connected server.</span><span>Person detection prototype - no drowning assessment</span></footer>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

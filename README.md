@@ -10,7 +10,7 @@ Status: 12-hour hackathon build. The plan is agreed, the MuJoCo simulation works
 1. [docs/global/architecture.md](docs/global/architecture.md): how it works, data contracts, code layout
 2. [docs/global/decisions.md](docs/global/decisions.md): what we agreed on and why
 3. [docs/global/milestones.md](docs/global/milestones.md): what each person delivers, hour by hour
-4. [presentation/slides/final/life-vision-hackathon-deck.pptx](presentation/slides/final/life-vision-hackathon-deck.pptx): final hackathon slide deck in the frontend's visual style, with speaker notes
+4. [presentation/slides/final/life-vision-hackathon-deck-clean.pptx](presentation/slides/final/life-vision-hackathon-deck-clean.pptx): final hackathon slide deck in a clean, high-legibility healthcare style, with speaker notes
 5. [presentation/presenter-script-final.md](presentation/presenter-script-final.md): timed 5:30 presentation script, demo checklist, and judge Q&A
 6. [docs/presentation.md](docs/presentation.md): supporting presentation narrative and failure plan
 

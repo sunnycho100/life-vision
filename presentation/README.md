@@ -1,6 +1,6 @@
 # Presentation assets
 
-Everything that goes into the slides: videos, images, charts, and the numbers behind them. Start with the [final deck](slides/final/life-vision-hackathon-deck.pptx) and [final presenter script](presenter-script-final.md). The earlier narrative remains in [docs/presentation.md](../docs/presentation.md) as supporting material.
+Everything that goes into the slides: videos, images, charts, and the numbers behind them. Start with the [final deck](slides/final/life-vision-hackathon-deck-clean.pptx) and [final presenter script](presenter-script-final.md). The earlier narrative remains in [docs/presentation.md](../docs/presentation.md) as supporting material.
 
 | Folder | What goes here |
 |---|---|
@@ -33,7 +33,7 @@ Name files by what they show, e.g. `before_stock_rfdetr_default_tracker.mp4`, no
 | `videos/isaac_pool_final_20260926-2151_rfdetr.mp4` | Stock RF-DETR Small (COCO, no fine-tuning) + ByteTrack on the clip: finds 78% of people (57% of those fully under water) | `model/benchmark_isaac.py --detector rfdetr-s --track --clean` |
 | `videos/isaac_pool_final_20260926-2151_yolo_alarms.mp4` | Our Isaac-trained YOLO11n + ByteTrack + underwater timer: WARNING at 5 s under, ALARM for the child at 13.5 s and the struggler at 16.9 s, no false alerts | `model/detect_drowning.py --video ... --gt ...` |
 | `data/sim_results.csv` | Detector and tracker results on the held-out sim scenario | [docs/global/simulation.md](../docs/global/simulation.md) |
-| `slides/final/life-vision-hackathon-deck.pptx` | Final 10-slide hackathon deck using the frontend palette and interaction language; includes editable chart data and speaker notes | generated with `slides/build_final_deck.mjs` from repository results and sources |
+| `slides/final/life-vision-hackathon-deck-clean.pptx` | Final 10-slide hackathon deck using a clean, high-legibility healthcare palette; includes editable chart data and speaker notes | generated with `slides/build_final_deck.mjs` from repository results and sources |
 | `presenter-script-final.md` | Timed 5:30 talk track, live-demo checklist, transitions, and likely judge Q&A | written from the final deck and measured repository results |
 | `images/generated/cover-pool-camera.png` | Cinematic pool-camera cover visual | generated with OpenAI ImageGen for this presentation |
 | `images/generated/safe-pool-demo.png` | Safe two-person pool scene used to explain the live demo | generated with OpenAI ImageGen for this presentation |

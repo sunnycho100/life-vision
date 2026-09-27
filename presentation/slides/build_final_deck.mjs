@@ -8,7 +8,7 @@ const CODEX_HOME = process.env.CODEX_HOME ?? path.join(process.env.HOME ?? "", "
 const SKILL_DIR = process.env.PRESENTATIONS_SKILL_DIR
   ?? path.join(CODEX_HOME, "plugins", "cache", "openai-primary-runtime", "presentations", "26.921.11914", "skills", "presentations");
 const TMP_DIR = path.join(workspaceDir, ".codex-build", "presentation");
-const FINAL_PPTX = path.join(workspaceDir, "presentation", "slides", "final", "life-vision-hackathon-deck.pptx");
+const FINAL_PPTX = path.join(workspaceDir, "presentation", "slides", "final", "life-vision-hackathon-deck-clean.pptx");
 const RUNTIME_PYTHON = process.env.RUNTIME_PYTHON ?? "python3";
 
 const { applyPresentationChartFont, finalizePresentation } = await import(
@@ -20,19 +20,19 @@ await fs.mkdir(path.dirname(FINAL_PPTX), { recursive: true });
 
 const W = 1280;
 const H = 720;
-const FONT = "Avenir Next";
+const FONT = "Arial";
 const C = {
-  bg: "#071411",
-  panel: "#0B1F1A",
-  panel2: "#102822",
-  line: "#24443A",
-  text: "#EDFDF6",
-  muted: "#8AACA0",
-  green: "#41F28D",
-  yellow: "#FFD447",
-  red: "#FF4E5C",
-  blue: "#64B7FF",
-  ink: "#04120D",
+  bg: "#F8FAFC",
+  panel: "#FFFFFF",
+  panel2: "#EEF5F6",
+  line: "#D7E1E7",
+  text: "#17324D",
+  muted: "#5E7182",
+  green: "#087F72",
+  yellow: "#A86E00",
+  red: "#C43D4D",
+  blue: "#2B6FAE",
+  ink: "#FFFFFF",
 };
 
 const IMG = path.join(workspaceDir, "presentation", "images");
@@ -136,8 +136,8 @@ function arrow(slide, from, to) {
 {
   const s = pres.slides.add();
   s.background.fill = C.bg;
-  image(s, "cover", 0, 0, W, H, "Concept image of a backyard pool viewed from above", "cover");
-  rect(s, 0, 0, 535, H, C.bg);
+  image(s, "cover", 698, 64, 524, 592, "Concept image of a backyard pool viewed from above", "cover", 24);
+  rect(s, 638, 64, 2, 592, C.line);
   rect(s, 58, 92, 38, 38, C.green, 10);
   rect(s, 66, 111, 5, 11, C.ink, 2);
   rect(s, 75, 101, 5, 21, C.ink, 2);
@@ -311,8 +311,7 @@ function arrow(slide, from, to) {
 {
   const s = pres.slides.add();
   s.background.fill = C.bg;
-  image(s, "camera", 0, 0, W, H, "Generic outdoor camera beside a backyard pool", "cover");
-  rect(s, 0, 0, 650, H, C.bg);
+  image(s, "camera", 706, 146, 516, 500, "Generic outdoor camera beside a backyard pool", "cover", 24);
   topRule(s, "Camera integration", 8);
   title(s, "One source adapter supports local video today and camera APIs later", 96, 560);
   const items = [
@@ -426,7 +425,7 @@ await finalizePresentation({
   requiredNativeChartOwnerSlides: [6],
   fontPolicy,
   verifyArtifactToolImport: true,
-  receiptPath: path.join(TMP_DIR, "life-vision-hackathon-deck.pptx.validation.json"),
+  receiptPath: path.join(TMP_DIR, "life-vision-hackathon-deck-clean.pptx.validation.json"),
 });
 
 console.log(FINAL_PPTX);

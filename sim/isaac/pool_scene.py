@@ -17,9 +17,10 @@ from pool_anim import Rig, relaxed
 POOL_L, POOL_W, POOL_D = 8.0, 4.0, 1.8  # meters; water surface at z = 0
 HEAD_R = 0.11  # rough adult head radius, meters; head height is measured at the head center
 
-# Work clothes nobody swims in. Matching mesh parts are hidden on every character.
+# Work clothes nobody swims in. Matching mesh parts are hidden on every character. Gloves stay:
+# the skin under them has no texture and renders as white forearms.
 HIDE_PARTS = ("hardhat", "policehat", "policeradio", "sunglasses", "idbadge", "stethoscope", "labcoat",
-              "safetyvest", "vest", "gloves", "reflective__pants")
+              "safetyvest", "vest", "reflective__pants")
 
 # Ambient surface waves: (amplitude m, wavelength m, direction deg, phase). Speeds follow the
 # capillary-gravity dispersion of real water, so short ripples and longer swells move differently.
@@ -138,7 +139,7 @@ class WaterSurface:
 
 
 class PoolScene:
-    def __init__(self, app):
+    def __init__(self, app, fill=150.0):
         self.app = app
         self.assets = get_assets_root_path()
         omni.usd.get_context().new_stage()
@@ -177,11 +178,29 @@ class PoolScene:
         ws = UsdShade.Shader(stage.GetPrimAtPath("/World/Looks/Water/Shader"))
         ws.CreateInput("transmission_color", Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(0.5, 0.88, 0.95))
         ws.CreateInput("depth", Sdf.ValueTypeNames.Float).Set(0.007)
-        self.water = WaterSurface(stage, "/World/Water", water, POOL_L, POOL_W, POOL_D)
+        # The water volume reaches 10 cm into the walls and floor, hidden inside them. If it stopped
+        # at the tile, the thin air gap would reflect underwater light back (total internal
+        # reflection) and the walls would render black.
+        self.water = WaterSurface(stage, "/World/Water", water, POOL_L + 0.2, POOL_W + 0.2, POOL_D + 0.1)
 
         self.sun = UsdLux.DistantLight.Define(stage, "/World/Sun")
         self.sun_xf = self.sun.AddTransformOp()
         self.sun.CreateAngleAttr(0.53)
+        # Soft underwater fill from the two near walls (facing the far walls), standing in for the
+        # light real pool water scatters. The path tracer can't carry sunlight through the rippling
+        # surface, so without this the walls the camera sees come out nearly black.
+        self.fills = []
+        for name, pos, rot, size in [("FillSouth", (0, -POOL_W / 2 + 0.03, -POOL_D / 2), (90, 0, 0), (POOL_L, POOL_D)),
+                                     ("FillWest", (-POOL_L / 2 + 0.03, 0, -POOL_D / 2), (0, -90, 0), (POOL_D, POOL_W))]:
+            light = UsdLux.RectLight.Define(stage, f"/World/{name}")
+            light.CreateWidthAttr(size[0])
+            light.CreateHeightAttr(size[1])
+            light.CreateColorAttr(Gf.Vec3f(0.85, 0.95, 1.0))
+            xf = UsdGeom.XformCommonAPI(light)
+            xf.SetTranslate(Gf.Vec3d(*pos))
+            xf.SetRotate(Gf.Vec3f(*rot))
+            self.fills.append(light)
+        self.set_fill(fill)
         self.sky = UsdLux.DomeLight.Define(stage, "/World/Sky")
         self.sky.CreateIntensityAttr(1000)
         self.sky.CreateTextureFormatAttr(UsdLux.Tokens.latlong)
@@ -307,6 +326,11 @@ class PoolScene:
         """Move an unused person far away. Toggling visibility instead makes the box
         annotators miss a person for the first frame they reappear."""
         self.ops[i].Set(Gf.Matrix4d().SetTranslate(Gf.Vec3d(1000 + 10 * i, 1000, 0)))
+
+    def set_fill(self, intensity):
+        """Strength of the underwater fill lights (0 turns them off)."""
+        for light in self.fills:
+            light.CreateIntensityAttr().Set(float(intensity))
 
     def set_sun(self, elev, azim, intensity=3000):
         """Sun elevation and compass direction it shines from (degrees; azimuth 0 = +x, 90 = +y)."""

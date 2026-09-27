@@ -50,4 +50,21 @@ Drowning alarms with our model (warn at 5 s under, alarm at 12 s or 8 s if still
 
 The diver's false warning comes from the timer starting at the first underwater frame and taking about 1 s to clear. That's a trade-off against missing flickering drowners, so tune it on real footage, not on this clip.
 
+### Final clip (2026-09-26 21:51): six people, moving water, 30 fps
+
+`sim/isaac/_out_final_20260926-2151` (local), 720p copies in `presentation/videos/`. Same YOLO11n weights, which never saw the new water, poses or child-sized person.
+
+| Detector | Found (IoU 0.5) | Found, head under | State correct |
+|---|---|---|---|
+| RF-DETR-S (COCO, no fine-tuning) + ByteTrack | 78% | 57% | no state |
+| Ours `pool_yolo11n` (IoU 0.4) | 97% swimming, 93% underwater | 93% | 96% / 98% |
+
+| Person | True warning | Model warning | True alarm (still rule) | Model alarm |
+|---|---|---|---|---|
+| swimmer, floater, treader, diver | none | none | none | none |
+| child (silent sink) | 10.5 s | 10.5 s | about 13.4 s | 13.5 s |
+| struggler (drowning response, then sinks) | 14.5 s | 13.7 s | about 17.5 s | 16.9 s |
+
+Two fixes in `detect_drowning.py` got the false alerts to zero on this clip: class-agnostic NMS (one box per person), and a stricter merge rule. A new track now takes over a lost person's timer only if it is also underwater and within half a body of where they were lost. Before that, a swimmer passing a sinking person took over their identity and timer.
+
 **Caveat:** train and test are both synthetic, from the same scene and characters. A good score here shows the pipeline works end to end. It says nothing yet about real pools. Test on real footage next.

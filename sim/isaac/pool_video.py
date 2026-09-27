@@ -54,6 +54,7 @@ parser.add_argument("--subframes", type=int, default=4, help="RTX subframes per 
 parser.add_argument("--pathtrace", type=int, default=0, metavar="SPP",
                     help="use the path tracer with this many samples per frame (e.g. 64): real refraction, "
                     "water color and caustics, but several times slower")
+parser.add_argument("--fill", type=float, default=150.0, help="underwater fill light strength (0 = off)")
 parser.add_argument("--gui", action="store_true", help="open the Isaac Sim window instead of headless")
 args = parser.parse_args()
 
@@ -80,7 +81,7 @@ if args.pathtrace:
     st.set("/rtx/pathtracing/optixDenoiser/enabled", True)
 
 rng = random.Random(args.seed)
-scene = PoolScene(simulation_app)
+scene = PoolScene(simulation_app, fill=args.fill)
 print("character heights (m):", [round(h, 2) for h in scene.heights], flush=True)
 
 

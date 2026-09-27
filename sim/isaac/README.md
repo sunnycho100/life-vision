@@ -17,7 +17,9 @@ whether each head is above, partly under, or fully under the water).
 - **Use `--pathtrace 32` (or 64 for a final cut) for realistic water** (refraction, tint, waterline, moving ripples). The default real-time renderer ignores the water's absorption, so the pool looks empty. Path tracing at 1080p takes about 1-2 s per frame on an RTX 4070 Laptop.
 - `gt.txt` and the YOLO labels use **full-body boxes**: the skeleton projected through the camera, with underwater joints moved to where refraction makes them appear (Snell's law against the mean surface). `labels.jsonl` also keeps the above-water-only box from Isaac's annotator.
 - Head state (`above`, `partial`, `below`) comes from the head center: `below` means the whole head is under the mean surface.
-- Underwater walls come out dark: the path tracer can't carry direct sunlight through the refracting surface, and real pool water's light scattering isn't modeled.
+- The water mesh reaches 10 cm into the walls and floor. Stopping at the tile leaves a thin air gap that reflects underwater light back (total internal reflection) and turns the walls black.
+- Two soft underwater fill lights (`--fill`, default 150) stand in for the light real pool water scatters. The path tracer can't carry direct sunlight through the rippling surface.
+- Gloves stay on: the skin under them has no texture and renders white.
 - Everything here is synthetic. Test models only on real footage.
 
 ## Setup (Windows)

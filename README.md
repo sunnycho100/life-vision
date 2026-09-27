@@ -2,6 +2,8 @@
 
 AI pool camera for parents. It tracks every person in a home pool and sounds an alarm when someone stays underwater too long.
 
+Continuing this project in Cursor or another coding environment? Start with [`CURSOR_HANDOFF.md`](CURSOR_HANDOFF.md).
+
 ## Repo layout
 | Folder | What | Owner |
 |---|---|---|

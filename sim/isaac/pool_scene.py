@@ -1,4 +1,4 @@
-"""Shared backyard-pool scene for the Isaac Sim scripts.
+﻿"""Shared backyard-pool scene for the Isaac Sim scripts.
 
 Import this only after SimulationApp has been created (it imports omni and pxr).
 Used by pool_replicator.py (random still images) and pool_video.py (scripted video).
@@ -11,9 +11,10 @@ import omni.usd
 from isaacsim.storage.native import get_assets_root_path
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdLux, UsdShade
 
+from pool_anim import Rig, relaxed
+
 POOL_L, POOL_W, POOL_D = 8.0, 4.0, 1.8  # meters; water surface at z = 0
-HEAD_R = 0.11  # rough head radius, meters
-HEAD_DOWN = 0.12  # head center sits this far below the top of the head
+HEAD_R = 0.11  # rough head radius, meters; head height is measured at the eyes
 
 CHARACTERS = [
     "/Isaac/People/Characters/F_Business_02/F_Business_02.usd",
@@ -73,7 +74,12 @@ class PoolScene:
         # Water: the whole pool is a volume with NVIDIA's water material, so light
         # refracts at the surface and fades to blue with depth. A thin slab does not.
         water = self.mdl_material("/World/Looks/Water", "/NVIDIA/Materials/Base/Natural/Water.mdl", uv=False)
-        self.box("/World/Water", (0, 0, -POOL_D / 2), (POOL_L, POOL_W, POOL_D), water)
+        # Pool-cyan tint: absorption = -ln(color) * depth * 100 per meter. At 0.012, submerged
+        # limbs turn blue-green within about 1 m. Only shows with path tracing.
+        ws = UsdShade.Shader(stage.GetPrimAtPath("/World/Looks/Water/Shader"))
+        ws.CreateInput("transmission_color", Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(0.55, 0.85, 0.88))
+        ws.CreateInput("depth", Sdf.ValueTypeNames.Float).Set(0.012)
+        self.water_st = self.water_box("/World/Water", water)
 
         self.sun = UsdLux.DistantLight.Define(stage, "/World/Sun")
         self.sun_rot = self.sun.AddRotateXYZOp()
@@ -84,14 +90,12 @@ class PoolScene:
         self.sky_tex = self.sky.CreateTextureFileAttr()
 
         # Characters under parent Xforms we own (the character files carry their own
-        # double-precision transform ops). Op order: move, yaw, tilt, then shift the
-        # body so the pivot is its middle, not its feet.
+        # transform ops). One matrix op per person, rebuilt every frame by set_person.
         self.people, self.ops = [], []
         for i, rel in enumerate(CHARACTERS):
             parent = UsdGeom.Xform.Define(stage, f"/World/People/person_{i}")
-            ops = (parent.AddTranslateOp(), parent.AddRotateZOp(), parent.AddRotateXOp(),
-                   parent.AddTranslateOp(opSuffix="pivot"))
-            self.ops.append(ops)
+            self.ops.append(parent.AddTransformOp())
+            self.ops[-1].Set(Gf.Matrix4d(1))
             stage.DefinePrim(f"/World/People/person_{i}/body").GetReferences().AddReference(self.assets + rel)
             self.people.append(parent.GetPrim())
         app.update()
@@ -107,16 +111,22 @@ class PoolScene:
             for p in self.people:
                 add_update_semantics(p, "person")
 
-        # Height of each character in its default pose (feet at local z = 0).
+        # A rig per person, plus where its skeleton sits inside the person's own space.
         cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_, UsdGeom.Tokens.render])
-        self.heights = []
-        for p, ops in zip(self.people, self.ops):
-            for op in ops:
-                op.Set(Gf.Vec3d(0, 0, 0) if op.GetOpType() == UsdGeom.XformOp.TypeTranslate else 0.0)
+        self.rigs, self.skel_xf, self.hip, self.yaw0, self.side_axis, self.heights = [], [], [], [], [], []
+        for i, p in enumerate(self.people):
+            rig = Rig(stage, p, f"/World/People/person_{i}/anim")
+            xf = UsdGeom.Xformable(rig.skel_prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+            model = rig.fk(rig.rest)
+            fwd = xf.TransformDir(rig.F)
+            self.rigs.append(rig)
+            self.skel_xf.append(xf)
+            self.hip.append(xf.Transform(rig.pos(model, "Hip")))
+            self.yaw0.append(math.degrees(math.atan2(fwd[1], fwd[0])))
+            self.side_axis.append(xf.TransformDir(rig.L).GetNormalized())
             cache.Clear()
             self.heights.append(cache.ComputeWorldBound(p).ComputeAlignedRange().GetMax()[2])
         for i in range(len(self.people)):
-            self.ops[i][3].Set(Gf.Vec3d(0, 0, -self.heights[i] / 2))
             self.park(i)
 
     def mdl_material(self, path, rel_url, scale=1.0, uv=True):
@@ -132,6 +142,31 @@ class PoolScene:
             shader.CreateInput("texture_scale", Sdf.ValueTypeNames.Float2).Set(Gf.Vec2f(scale, scale))
         return UsdShade.Material(self.stage.GetPrimAtPath(path))
 
+    def water_box(self, path, mat):
+        """The pool volume as a mesh whose UVs tile the ripple normal map about every 1.5 m.
+        A Cube's UVs stretch one texture over each whole face. Returns the UV primvar so
+        ripples can be scrolled over time."""
+        x, y, z = POOL_L / 2, POOL_W / 2, POOL_D
+        pts = [(-x, -y, -z), (x, -y, -z), (x, y, -z), (-x, y, -z), (-x, -y, 0), (x, -y, 0), (x, y, 0), (-x, y, 0)]
+        faces = [(4, 5, 6, 7), (0, 3, 2, 1), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+        mesh = UsdGeom.Mesh.Define(self.stage, path)
+        mesh.CreatePointsAttr([Gf.Vec3f(*pts[i]) for f in faces for i in f])
+        mesh.CreateFaceVertexCountsAttr([4] * 6)
+        mesh.CreateFaceVertexIndicesAttr(list(range(24)))
+        mesh.CreateSubdivisionSchemeAttr("none")
+        self._water_pts = [pts[i] for f in faces for i in f]
+        st = UsdGeom.PrimvarsAPI(mesh).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray,
+                                                     UsdGeom.Tokens.faceVarying)
+        UsdShade.MaterialBindingAPI.Apply(mesh.GetPrim()).Bind(mat)
+        self.water_mesh_st = st
+        self.set_ripples(0.0)
+        return st
+
+    def set_ripples(self, t, tile=1.5, speed=(0.05, 0.03)):
+        """Scroll the ripple texture so the surface moves (t in seconds)."""
+        self.water_mesh_st.Set([Gf.Vec2f(px / tile + speed[0] * t, py / tile + speed[1] * t)
+                                for px, py, _ in self._water_pts])
+
     def box(self, path, center, size, mat):
         cube = UsdGeom.Cube.Define(self.stage, path)
         cube.CreateSizeAttr(1.0)
@@ -141,22 +176,24 @@ class PoolScene:
         UsdShade.MaterialBindingAPI.Apply(cube.GetPrim()).Bind(mat)
         return cube
 
-    def set_person(self, i, x, y, head_z, yaw=0.0, tilt=0.0):
-        """Place person i so their head center is at height head_z.
-        tilt: 0 = upright, 90 = lying flat (face down when yaw points the way they swim)."""
-        reach = self.heights[i] / 2 - HEAD_DOWN  # body middle to head center
-        center_z = head_z - math.cos(math.radians(tilt)) * reach
-        move, rz, rx, _ = self.ops[i]
-        move.Set(Gf.Vec3d(x, y, center_z))
-        rz.Set(yaw)
-        rx.Set(tilt)
-        return {"head_z": round(head_z, 3), "head_top_z": round(head_z + HEAD_DOWN, 3),
-                "head_state": head_state(head_z)}
+    def set_person(self, i, x, y, head_z, yaw=0.0, tilt=0.0, pose=None):
+        """Pose person i and place them so their eyes are at height head_z.
+        x, y: hip position. yaw: direction the chest faces, degrees.
+        tilt: 0 = upright, 90 = lying face down. pose: dict from pool_anim (default relaxed)."""
+        rig = self.rigs[i]
+        model = rig.pose(pose or relaxed())
+        eyes = self.skel_xf[i].Transform(rig.eyes(model))
+        m = (Gf.Matrix4d().SetTranslate(-self.hip[i])
+             * Gf.Matrix4d().SetRotate(Gf.Rotation(self.side_axis[i], tilt))
+             * Gf.Matrix4d().SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), yaw - self.yaw0[i])))
+        e = m.Transform(eyes)
+        self.ops[i].Set(m * Gf.Matrix4d().SetTranslate(Gf.Vec3d(x, y, head_z - e[2])))
+        return {"head_z": round(head_z, 3), "head_state": head_state(head_z)}
 
     def park(self, i):
         """Move an unused person far away. Toggling visibility instead makes the box
         annotators miss a person for the first frame they reappear."""
-        self.ops[i][0].Set(Gf.Vec3d(1000 + 10 * i, 1000, 0))
+        self.ops[i].Set(Gf.Matrix4d().SetTranslate(Gf.Vec3d(1000 + 10 * i, 1000, 0)))
 
     def set_light(self, rng=random, sky=None):
         elev = rng.uniform(25, 80)

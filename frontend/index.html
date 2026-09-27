@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="We Fall, We Die — explainable pool-risk monitoring demo"
+    />
+    <title>We Fall, We Die — Pool Monitor</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <canvas id="matrixCanvas" aria-hidden="true"></canvas>
+
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="We Fall, We Die home">
+        <span class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
+        <span>
+          <strong>WE FALL, WE DIE</strong>
+          <small>POOL INTELLIGENCE / DEMO BUILD</small>
+        </span>
+      </a>
+
+      <div class="system-state">
+        <span class="pulse-dot"></span>
+        <span id="systemStatus">SYSTEM READY</span>
+        <span class="demo-pill">SIMULATED INFERENCE</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero-grid">
+        <div class="intro">
+          <p class="eyebrow">CAMERA 01 · BACKYARD POOL</p>
+          <h1>See the risk.<br /><em>Before it becomes silence.</em></h1>
+          <p class="lede">
+            One camera. Two temporal behaviors. A clear explanation for every alert.
+            Upload your team video and demonstrate the complete experience with scripted model results.
+          </p>
+        </div>
+
+        <div class="summary-card">
+          <span class="summary-label">CURRENT SESSION</span>
+          <div class="summary-value"><strong id="peopleCount">0</strong> people tracked</div>
+          <div class="summary-value"><strong id="riskCount">0</strong> active risks</div>
+          <div class="summary-rule"></div>
+          <p>Analysis stays off until you activate monitoring.</p>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <div class="monitor-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">LIVE ANALYSIS</p>
+              <h2>Pool feed</h2>
+            </div>
+            <div class="feed-meta">
+              <span><i></i> <span id="feedState">STANDBY</span></span>
+              <span id="clock">00:00:00</span>
+            </div>
+          </div>
+
+          <div class="video-shell" id="videoShell">
+            <video id="video" playsinline muted loop></video>
+            <div class="placeholder" id="placeholder">
+              <div class="water-lines"></div>
+              <div class="pool-grid"></div>
+              <div class="placeholder-copy">
+                <span class="camera-icon">◉</span>
+                <strong>ADD YOUR POOL FOOTAGE</strong>
+                <small>The scripted demo also runs on this simulated feed.</small>
+              </div>
+            </div>
+            <canvas id="overlayCanvas" aria-label="Person detection overlay"></canvas>
+            <div class="scan-line" id="scanLine"></div>
+            <div class="critical-banner" id="criticalBanner" role="alert">
+              <span>CRITICAL RISK DETECTED</span>
+              <strong>CHECK THE POOL NOW</strong>
+            </div>
+            <div class="source-tag" id="sourceTag">DEMO FEED · 1920 × 1080</div>
+          </div>
+
+          <div class="controls">
+            <label class="upload-button" for="videoUpload">
+              <span>＋</span> Choose video
+            </label>
+            <input id="videoUpload" type="file" accept="video/*" />
+
+            <button class="activate-button" id="activateButton" type="button">
+              <span class="button-icon">▶</span>
+              <span id="activateLabel">Activate monitoring</span>
+            </button>
+
+            <button class="ghost-button" id="resetButton" type="button">Reset demo</button>
+          </div>
+        </div>
+
+        <aside class="side-panel">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">DECISION ENGINE</p>
+              <h2>People & risk</h2>
+            </div>
+            <span class="live-badge" id="liveBadge">OFFLINE</span>
+          </div>
+
+          <div class="empty-state" id="emptyState">
+            <div class="radar"><span></span></div>
+            <strong>Waiting for activation</strong>
+            <p>Tracked people and explainable risk signals will appear here.</p>
+          </div>
+
+          <div class="person-list" id="personList" aria-live="polite"></div>
+
+          <div class="settings-block">
+            <div class="settings-heading">
+              <span>ALERT PREFERENCE</span>
+              <span class="demo-pill small">DEMO THRESHOLDS</span>
+            </div>
+            <div class="segmented-control" role="group" aria-label="Alert preference">
+              <button type="button" data-alert="yellow">Yellow + red</button>
+              <button type="button" data-alert="red" class="selected">Red only</button>
+              <button type="button" data-alert="screen">Screen only</button>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="lower-grid">
+        <article class="timeline-card">
+          <div class="panel-heading compact">
+            <div>
+              <p class="eyebrow">INCIDENT TIMELINE</p>
+              <h2>What the system saw</h2>
+            </div>
+            <button id="clearEvents" class="text-button" type="button">Clear</button>
+          </div>
+          <ol id="eventLog" class="event-log">
+            <li class="muted-event">
+              <time>—</time>
+              <span>No events yet. Activate monitoring to start the demonstration.</span>
+            </li>
+          </ol>
+        </article>
+
+        <article class="pipeline-card">
+          <p class="eyebrow">UNDER THE HOOD</p>
+          <h2>One pipeline, two behaviors</h2>
+          <div class="pipeline">
+            <span>VIDEO</span><b>→</b><span>DETECT</span><b>→</b><span>TRACK</span><b>→</b><span>TIME</span>
+          </div>
+          <div class="behavior-grid">
+            <div>
+              <span class="behavior-number">01</span>
+              <strong>Passive submersion</strong>
+              <p>Visible in pool, then missing without crossing the boundary.</p>
+            </div>
+            <div>
+              <span class="behavior-number">02</span>
+              <strong>Active distress</strong>
+              <p>Repeated upper-body motion with little forward progress.</p>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <span>RESEARCH PROTOTYPE — NOT A CERTIFIED LIFESAVING DEVICE</span>
+      <span>Always maintain responsible adult supervision and physical pool barriers.</span>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

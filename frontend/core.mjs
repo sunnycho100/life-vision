@@ -102,3 +102,19 @@ export function inside(p, quad) {
   });
 }
 
+export function surfacePosition(detection, config) {
+  const {bbox_xyxy_normalized: box} = detection ?? {};
+  const {corners, width, length, water, measured} = config ?? {};
+  if (!Array.isArray(box) || box.length !== 4 || !box.every(Number.isFinite) || box.some(v => v < 0 || v > 1) || box[2] <= box[0] || box[3] <= box[1]) return null;
+  if (!Array.isArray(corners) || corners.length !== 4 || corners.some(p => !Array.isArray(p) || p.length !== 2 || !p.every(Number.isFinite)) ||
+      !validQuad(corners) || ![width, length, water].every(Number.isFinite) || width <= 0 || length <= 0 || water < 0) return null;
+  const anchor = boxAnchor(box);
+  if (!inside(anchor, corners)) return null;
+  try {
+    const h = homography(corners, [[0, 0], [width, 0], [width, length], [0, length]]);
+    const [x, y] = project(h, ...anchor) ?? [];
+    if (![x, y].every(Number.isFinite)) return null;
+    return {x, y: water, z: y, method: 'water-plane-homography', height_assumed: true, units: 'm', calibration: measured ? 'user-measured' : 'approximate'};
+  } catch { return null; }
+}
+

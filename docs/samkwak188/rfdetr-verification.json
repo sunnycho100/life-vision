@@ -1,0 +1,497 @@
+{
+  "scope": "Local measurements; candidate counts are not accuracy. No trained pool checkpoint or reviewed accuracy labels.",
+  "date": "2026-09-26",
+  "full_clip": {
+    "id": "e091231fbca848e2bd6d4f431bce7825",
+    "source_id": "66f488b08e2122e9d8195972a481af2931b0ea6586ed229208b02a195a488d2c",
+    "state": "completed",
+    "progress": 1,
+    "frames_analyzed": 645,
+    "incomplete": false,
+    "created": 1790476629.1411989,
+    "model": "RF-DETR Nano",
+    "backend": "onnx",
+    "start": 0.0,
+    "end": 128.91211666666666,
+    "stored_threshold": 0.2,
+    "runtime": {
+      "backend": "onnx",
+      "onnxruntime": "1.24.2",
+      "provider": "CPUExecutionProvider",
+      "graph_optimization": "BASIC",
+      "platform": "win-arm64"
+    },
+    "last_media_time": 128.81201666666666,
+    "inference_ms": 196.78220001515,
+    "elapsed_seconds": 139.00739949999843,
+    "inference_ms_median": 187.14890000410378,
+    "inference_ms_p95": 248.79866001429033,
+    "processing_video_seconds_per_wall_second": 0.927375932003304
+  },
+  "browser": {
+    "status": "passed",
+    "real_rf_detr": {
+      "detections": 3,
+      "inference_ms": 202,
+      "runtime": "CPUExecutionProvider",
+      "video_time": 8.008998,
+      "boxes": 3
+    },
+    "timing_checks": [
+      {
+        "decoder_time": 8.008,
+        "browser_time": 8.008
+      },
+      {
+        "decoder_time": 22.0053166667,
+        "browser_time": 22.005317
+      },
+      {
+        "decoder_time": 45.0116333333,
+        "browser_time": 45.011633
+      },
+      {
+        "decoder_time": 70.0032666667,
+        "browser_time": 70.003267
+      },
+      {
+        "decoder_time": 90.0065833333,
+        "browser_time": 90.006583
+      }
+    ],
+    "vfr_timing_checks": [
+      {
+        "decoder_time": 0.25,
+        "browser_time": 0.25
+      },
+      {
+        "decoder_time": 0.46,
+        "browser_time": 0.46
+      },
+      {
+        "decoder_time": 0.71,
+        "browser_time": 0.71
+      },
+      {
+        "decoder_time": 0.84,
+        "browser_time": 0.84
+      }
+    ],
+    "synthetic_checks": [
+      "150 boxes",
+      "empty vs unavailable",
+      "legacy import",
+      "pool boundary"
+    ],
+    "page_errors": [],
+    "pose_network_requests": []
+  },
+  "deployment_parity": {
+    "passed": true,
+    "onnxruntime": "1.24.2",
+    "provider": "CPUExecutionProvider",
+    "graph_optimization": "BASIC",
+    "platform": "win-arm64",
+    "model_sha256": "fcc99ec4e85c88a553aa495b7df79892444990f25c2fb9d705066e8402f6035c",
+    "frames": [
+      {
+        "time": 8.008,
+        "preprocessing_max_error": 0.0,
+        "raw_max_error": {
+          "boxes": 9.998679161071777e-06,
+          "logits": 6.914138793945312e-05
+        },
+        "boxes": 37,
+        "max_pixel_error": 0.0002079010009765625,
+        "max_score_error": 2.473592758178711e-06,
+        "two_forward_passes_ms": 683.1879999954253
+      },
+      {
+        "time": 22.005316666666666,
+        "preprocessing_max_error": 0.0,
+        "raw_max_error": {
+          "boxes": 4.738569259643555e-06,
+          "logits": 0.00011110305786132812
+        },
+        "boxes": 34,
+        "max_pixel_error": 0.00031280517578125,
+        "max_score_error": 2.0712614059448242e-06,
+        "two_forward_passes_ms": 263.6983999982476
+      },
+      {
+        "time": 45.011633333333336,
+        "preprocessing_max_error": 0.0,
+        "raw_max_error": {
+          "boxes": 1.2099742889404297e-05,
+          "logits": 0.000438690185546875
+        },
+        "boxes": 38,
+        "max_pixel_error": 0.0001220703125,
+        "max_score_error": 1.2814998626708984e-06,
+        "two_forward_passes_ms": 280.76100000180304
+      },
+      {
+        "time": 70.00326666666666,
+        "preprocessing_max_error": 0.0,
+        "raw_max_error": {
+          "boxes": 4.082918167114258e-06,
+          "logits": 0.00018644332885742188
+        },
+        "boxes": 35,
+        "max_pixel_error": 0.002224445343017578,
+        "max_score_error": 1.0192394256591797e-05,
+        "two_forward_passes_ms": 266.651300014928
+      },
+      {
+        "time": 90.00658333333334,
+        "preprocessing_max_error": 0.0,
+        "raw_max_error": {
+          "boxes": 8.52346420288086e-06,
+          "logits": 0.00016570091247558594
+        },
+        "boxes": 26,
+        "max_pixel_error": 0.0001983642578125,
+        "max_score_error": 1.1771917343139648e-06,
+        "two_forward_passes_ms": 263.11330002499744
+      }
+    ],
+    "adapter_sha256": "836907b1f66d1aeb5148f4a99b5b50b8bbb4e748c6e042c734dcd05d2c30c2a9",
+    "scope": "Numerical equivalence only; not detection accuracy or generalization."
+  },
+  "development_counts": {
+    "schema": "detection-experiment-summary/1",
+    "interpretation": "Candidate detection counts only; not precision, recall, or verified people. Summaries use dev frames only; locked frames are excluded.",
+    "thresholds": [
+      0.2,
+      0.35,
+      0.5
+    ],
+    "annotations_sha256": "ab104995c4f0c9fdd8be553fe211a6552ff73aa7f60bbd709264c94519238c6e",
+    "experiments": [
+      {
+        "name": "rfdetr-full",
+        "model": "rfdetr",
+        "model_sha256": "fcc99ec4e85c88a553aa495b7df79892444990f25c2fb9d705066e8402f6035c",
+        "source_sha256": "66f488b08e2122e9d8195972a481af2931b0ea6586ed229208b02a195a488d2c",
+        "predictions_sha256": "775c036b025d2fc6a45a6852a9704497d83383af5b3381c3ac0ec6a18bfa27ad",
+        "dev_frame_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "counts": [
+          {
+            "threshold": 0.2,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 37,
+            "dev_count": 573,
+            "dev_frames": 16
+          },
+          {
+            "threshold": 0.35,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 12,
+            "dev_count": 147,
+            "dev_frames": 16
+          },
+          {
+            "threshold": 0.5,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 3,
+            "dev_count": 60,
+            "dev_frames": 16
+          }
+        ],
+        "timing": {
+          "dev_mean_ms": 148.29446875592112,
+          "first_dev_frame_ms": 158.59360003378242
+        }
+      },
+      {
+        "name": "yolo-full",
+        "model": "yolo",
+        "model_sha256": "190ba5f1e61411a001683e349d6b2cdb0804c0dc67a5e34cd8ff6fd00ee54b4d",
+        "source_sha256": "66f488b08e2122e9d8195972a481af2931b0ea6586ed229208b02a195a488d2c",
+        "predictions_sha256": "eec66c153920bd995e64c5f7146b6a1ba4c02d5b67fede2a22992f93b43263cb",
+        "dev_frame_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "counts": [
+          {
+            "threshold": 0.2,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 8,
+            "dev_count": 147,
+            "dev_frames": 16
+          },
+          {
+            "threshold": 0.35,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 3,
+            "dev_count": 63,
+            "dev_frames": 16
+          },
+          {
+            "threshold": 0.5,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 2,
+            "dev_count": 28,
+            "dev_frames": 16
+          }
+        ],
+        "timing": {
+          "dev_mean_ms": 49.97117499442538,
+          "first_dev_frame_ms": 51.21720000170171
+        }
+      },
+      {
+        "name": "rfdetr-tiled-05",
+        "model": "rfdetr",
+        "model_sha256": "fcc99ec4e85c88a553aa495b7df79892444990f25c2fb9d705066e8402f6035c",
+        "source_sha256": "66f488b08e2122e9d8195972a481af2931b0ea6586ed229208b02a195a488d2c",
+        "predictions_sha256": "a553e1c50d0cd0f2f911943c93b0c230d5590fbe5f5e9f4eb03a912ec1c5d9dc",
+        "dev_frame_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "counts": [
+          {
+            "threshold": 0.2,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 95,
+            "dev_count": 1511,
+            "dev_frames": 16
+          },
+          {
+            "threshold": 0.35,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 35,
+            "dev_count": 545,
+            "dev_frames": 16
+          },
+          {
+            "threshold": 0.5,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 12,
+            "dev_count": 222,
+            "dev_frames": 16
+          }
+        ],
+        "timing": {
+          "dev_mean_ms": 1090.8780000063416,
+          "first_dev_frame_ms": 1143.6946999747306
+        }
+      },
+      {
+        "name": "yolo-tiled-05",
+        "model": "yolo",
+        "model_sha256": "190ba5f1e61411a001683e349d6b2cdb0804c0dc67a5e34cd8ff6fd00ee54b4d",
+        "source_sha256": "66f488b08e2122e9d8195972a481af2931b0ea6586ed229208b02a195a488d2c",
+        "predictions_sha256": "6f1a0c1066e386d9d989523284e38f680cbbfc311c847805d02b84c13570e6c5",
+        "dev_frame_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "counts": [
+          {
+            "threshold": 0.2,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 28,
+            "dev_count": 524,
+            "dev_frames": 16
+          },
+          {
+            "threshold": 0.35,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 8,
+            "dev_count": 256,
+            "dev_frames": 16
+          },
+          {
+            "threshold": 0.5,
+            "first_dev_frame_id": 0,
+            "first_dev_frame_count": 5,
+            "dev_count": 121,
+            "dev_frames": 16
+          }
+        ],
+        "timing": {
+          "dev_mean_ms": 330.4621250026685,
+          "first_dev_frame_ms": 323.19100003223866
+        }
+      }
+    ]
+  },
+  "resolution_ablation": [
+    {
+      "file": "artifacts\\evaluation\\resolution-probe\\nano-384.json",
+      "sha256": "761f5c8643dd7da2179c4fb53f85b5bc2a2e961af04d7772e1156b494eba5de8",
+      "resolution": 384,
+      "runtime": {
+        "backend": "python",
+        "torch": "2.10.0+cpu",
+        "rfdetr": "1.11.0",
+        "provider": "cpu",
+        "python": "3.12.10",
+        "machine": "AMD64",
+        "threads": 4,
+        "numpy": "2.4.3"
+      },
+      "model_sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d",
+      "dev_frames": 16,
+      "threshold_totals": {
+        "0.2": 573,
+        "0.35": 147,
+        "0.5": 60
+      },
+      "median_ms": 309.42650002543814,
+      "mean_ms": 330.04962500490365
+    },
+    {
+      "file": "artifacts\\evaluation\\resolution-probe\\nano-512.json",
+      "sha256": "9672f7f76ba3d13111c71557c9b90a57e60fc770407abdcb851e14492e32695a",
+      "resolution": 512,
+      "runtime": {
+        "backend": "python",
+        "torch": "2.10.0+cpu",
+        "rfdetr": "1.11.0",
+        "provider": "cpu",
+        "python": "3.12.10",
+        "machine": "AMD64",
+        "threads": 4,
+        "numpy": "2.4.3"
+      },
+      "model_sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d",
+      "dev_frames": 16,
+      "threshold_totals": {
+        "0.2": 614,
+        "0.35": 160,
+        "0.5": 66
+      },
+      "median_ms": 585.4167999932542,
+      "mean_ms": 646.5039249997062
+    },
+    {
+      "file": "artifacts\\evaluation\\resolution-probe\\nano-640.json",
+      "sha256": "f0e6a1d638992a4bfc0c9b880c85f9317b5348535aec2dabf59775cd796da07c",
+      "resolution": 640,
+      "runtime": {
+        "backend": "python",
+        "torch": "2.10.0+cpu",
+        "rfdetr": "1.11.0",
+        "provider": "cpu",
+        "python": "3.12.10",
+        "machine": "AMD64",
+        "threads": 4,
+        "numpy": "2.4.3"
+      },
+      "model_sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d",
+      "dev_frames": 16,
+      "threshold_totals": {
+        "0.2": 588,
+        "0.35": 157,
+        "0.5": 65
+      },
+      "median_ms": 810.2205999894068,
+      "mean_ms": 877.5404687548871
+    }
+  ],
+  "accuracy_labels_reviewed": 0,
+  "pilot_config": "RF-DETR 1.11.0 TrainConfig validation passed; no training run",
+  "upstream_model_audit": {
+    "schema": "upstream-model-audit/1",
+    "commit": "2dfd33d6da45ec795cd35e47a683ea48d9f59199",
+    "source_hash_format": "SHA-256 of UTF-8 source with normalized newlines",
+    "sources": {
+      "model/detect_people_rfdetr_s.py": "ffb1ed8109d8388b13af2896c5b5dce390d47fea99806dc012581316c316d2fb",
+      "model/detect_drowning.py": "46386d4bfd6dcd4fbd61cab9f4163e86d5d4fd5e13c723055e9880a16fe1b481"
+    },
+    "scope": "Static source inspection plus synthetic code-path diagnostics only; not model accuracy, field performance, or real person outcomes.",
+    "duplicate_filter": {
+      "extracted": "main statements from order=np.argsort(-S) through before out=img.copy",
+      "nms_iou_cutoff": 0.5,
+      "nested_iou": 0.04,
+      "containment_overlap_of_smaller_cutoff": 0.8,
+      "fragment_min_max_area_ratio_cutoff": 0.35,
+      "fragment_overlap_of_smaller_cutoff": 0.4,
+      "synthetic_boxes": 3,
+      "kept_indices": [
+        0,
+        2
+      ],
+      "finding": "A nested separate-person box survives IoU NMS at 0.5 but is removed by containment filtering; the disjoint box remains."
+    },
+    "person_timer": {
+      "extracted": "Person class only",
+      "person_only_update_clears_under_since": true,
+      "finding": "In PERSON_ONLY mode, every visible Person.update resets under_since, even when the synthetic initial timer represents externally known submersion."
+    },
+    "thresholds": {
+      "rfdetr_cli_thr_default": 0.3,
+      "tracker_low_threshold": "f\"tracker_type: bytetrack\\ntrack_high_thresh: 0.3\\ntrack_low_thresh: 0.1\\nnew_track_thresh: 0.4\\n\"",
+      "yolo_cli_conf_default": 0.3,
+      "finding": "RF-DETR CLI threshold default and YOLO detector confidence default are distinct from ByteTrack track_low_thresh."
+    }
+  },
+  "automated_checks": {
+    "pytest": "16 passed",
+    "surface_geometry": "oblique plane, axis convention, invalid input, 3D marker placement, raycast selection, stale selection clearing passed",
+    "browser": "real RF detections, replay, VFR, cache, 150 boxes, empty/unavailable, no pose requests passed"
+  }
+}

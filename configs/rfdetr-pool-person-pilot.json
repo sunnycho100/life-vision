@@ -1,0 +1,23 @@
+{
+  "dataset_file": "roboflow",
+  "epochs": 30,
+  "batch_size": 2,
+  "grad_accum_steps": 8,
+  "lr": 0.0001,
+  "lr_encoder": 0.00015,
+  "optimizer": "adamw",
+  "weight_decay": 0.0001,
+  "lr_scheduler": "step",
+  "lr_scheduler_kwargs": {"lr_drop": 20},
+  "multi_scale": false,
+  "expanded_scales": false,
+  "use_ema": true,
+  "early_stopping": false,
+  "best_model_metric": "map",
+  "eval_max_dets": 300,
+  "num_workers": 0,
+  "seed": 42,
+  "run_test": false,
+  "tensorboard": false,
+  "wandb": false
+}

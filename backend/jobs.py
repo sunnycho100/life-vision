@@ -67,9 +67,9 @@ class JobManager:
             spec = {"schema": "detections/1", "source_id": source["id"], "source_sha256": source["sha256"],
                     "source": source, "start": start, "end": min(end, source["duration"]), "sample_hz": 5,
                     "sampling": "first distinct frame at/after target; source PTS minus stream start",
-                    "stored_threshold": .2, "display_threshold": .5, "tiling": False,
+                    "stored_threshold": .1, "display_threshold": .5, "tiling": False,
                     "model_manifest": model, "model_manifest_sha256": digest(self.manifest_path),
-                    "backend": self.backend, "provider": self.provider, "pipeline_version": 1,
+                    "backend": self.backend, "provider": self.provider, "pipeline_version": 2,
                     "worker_python": self.worker_python}
             spec["pipeline_sha256"] = {name: code_digest(ROOT / "backend" / name) for name in ["detector.py", "worker.py", "common.py"]}
             fingerprint = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
@@ -88,7 +88,7 @@ class JobManager:
             write_json(directory / "manifest.json", spec)
             status = {"id": job_id, "source_id": source["id"], "state": "starting", "progress": 0,
                       "frames_analyzed": 0, "incomplete": True, "created": time.time(), "model": "RF-DETR Nano",
-                      "backend": self.backend, "start": start, "end": end, "stored_threshold": .2}
+                      "backend": self.backend, "start": start, "end": end, "stored_threshold": .1}
             write_json(directory / "status.json", status)
             observation_db(directory / "observations.sqlite3").close()
             try:

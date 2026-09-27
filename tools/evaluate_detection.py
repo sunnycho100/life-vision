@@ -5,11 +5,12 @@ All coordinates are normalized xyxy. Run python -m tools.evaluate_detection --he
 """
 import argparse
 import json
+import hashlib
 import math
 from pathlib import Path
 import time
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 from backend.common import ROOT, digest, read_json, write_json
 from backend.detector import OnnxDetector
 from tools.prepare_rfdetr import frame_samples
@@ -143,6 +144,8 @@ def validate_labels(data, predictions, split):
     expected = 16 if split == "dev" else 8
     if len(frames) != expected or any(f.get("reviewed") is not True for f in frames):
         raise ValueError(f"Need all {expected} {split} frames manually reviewed. Unreviewed templates are not ground truth.")
+    if len({f["id"] for f in frames}) != len(frames):
+        raise ValueError("Duplicate annotation frame IDs")
     predicted = {f["id"]: f for f in predictions["frames"]}
     if len(predicted) != len(predictions["frames"]):
         raise ValueError("Duplicate prediction frame IDs")
@@ -156,6 +159,10 @@ def validate_labels(data, predictions, split):
             if not isinstance(obj.get("in_pool"), bool):
                 raise ValueError("Each person needs an in_pool boolean")
     return frames, predicted
+
+
+def development_digest(data):
+    return hashlib.sha256(json.dumps([f for f in data["frames"] if f["split"] == "dev"], sort_keys=True).encode()).hexdigest()
 
 
 def measure(data, predictions, split, threshold, membership="bottom-center"):
@@ -211,6 +218,7 @@ def select(labels, candidates, output):
     eligible = [r for r in results if r["tp"] > 0 and r["precision"] >= .9]
     best = max(eligible, key=lambda r: (r["recall"], r["precision"], r["threshold"])) if eligible else None
     write_json(output, {"passed": best is not None, "model": pred["model"], "predictions_sha256": digest(candidates),
+                        "dev_labels_sha256": development_digest(data),
                         "labels_sha256_at_selection": digest(labels), "selected": best, "membership_anchor": membership,
                         "anchor_errors_on_ground_truth": errors, "precision_target": .9,
                         "dev_ap50_candidates_above_005": measure(data, pred, "dev", .05, membership)["ap50_above_threshold"],
@@ -224,6 +232,8 @@ def evaluate(labels, candidates, policy, output):
     if not frozen["passed"]: raise ValueError("No development configuration passed the precision screen.")
     if frozen["predictions_sha256"] != digest(candidates): raise ValueError("Predictions changed after policy selection")
     data, pred = read_json(labels), read_json(candidates)
+    if development_digest(data) != frozen["dev_labels_sha256"]:
+        raise ValueError("Development labels changed after policy selection")
     report = measure(data, pred, "locked", frozen["selected"]["threshold"], frozen["membership_anchor"])
     report.update(policy_sha256=digest(policy), labels_sha256=digest(labels), scope="Locked temporal segment from the same camera; not independent generalization.")
     write_json(output, report); print(json.dumps(report, indent=2))

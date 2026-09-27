@@ -6,10 +6,17 @@ const panels = ['source', 'calibrate', 'scan', 'twin'];
 let phase = 'source', corners = [[.085, .08], [.95, .14], [.96, .91], [.22, .91]];
 let source = null, reference, config = null, job = null, twin = null, importedFrames = null;
 let sourceGeneration = 0, frameTime = 0, currentDetections = [], threshold = .5, refreshPending = false, pollBusy = false;
+let reviewAnalysis = null, reviewBusy = false, reviewSubmitting = false, incidents = [], selectedIncident = null, currentTracks = [], trackRenderKey = '';
+let soundEnabled = false, alertAudio = null;
+const seenEvents = new Set();
 const handles = [];
 const cache = new ObservationCache(async (start, end) => {
   const response = await api('/api/jobs/' + job.id + '/observations?start=' + start + '&end=' + end);
   return response.observations;
+});
+const trackCache = new ObservationCache(async (start, end) => {
+  const response = await api('/api/jobs/' + job.id + '/tracks?start=' + start + '&end=' + end);
+  return response.frames.map(frame => ({...frame, status: ['ok', 'uncalibrated'].includes(frame.quality) ? 'analyzed' : frame.quality}));
 });
 
 async function api(url, options) {
@@ -42,7 +49,12 @@ function videoRect() {
   return {x: (w - width) / 2, y: (h - height) / 2, width, height};
 }
 function mappingValid() {return config && video.currentTime >= config.start - 1e-6 && video.currentTime < config.end;}
-function clearDisplay() {currentDetections = []; twin?.updatePeople([]); $('person-count').textContent = '—'; $('pool-count').textContent = '—';}
+function showPosition(position) {
+  $('surface-position').textContent = position
+    ? `Estimated position: X ${position.x.toFixed(1)} m · Z ${position.z.toFixed(1)} m from corner 1. ${position.calibration === 'user-measured' ? 'User-measured plane' : 'Approximate dimensions'}. Height is assumed at the water surface; marker size is symbolic.`
+    : 'Pause and select a 3D marker to inspect its estimated position across the water.';
+}
+function clearDisplay() {currentDetections = []; currentTracks = []; renderTrackStates(null); twin?.updatePeople([]); showPosition(null); $('person-count').textContent = '—'; $('pool-count').textContent = '—';}
 function draw() {
   const width = $('video-pane').clientWidth, height = $('video-pane').clientHeight, dpr = Math.min(devicePixelRatio, 2);
   if (overlay.width !== Math.round(width * dpr) || overlay.height !== Math.round(height * dpr)) {
@@ -58,10 +70,12 @@ function draw() {
   handles.forEach((handle, i) => {const p = point(corners[i]); handle.style.left = p[0] + 'px'; handle.style.top = p[1] + 'px';});
   for (const detection of currentDetections) {
     const b = detection.bbox_xyxy_normalized, a = point(b.slice(0, 2)), z = point(b.slice(2));
-    context.strokeStyle = '#9be6ce'; context.fillStyle = '#c5ffeb'; context.lineWidth = 1.4;
+    const color = detection.review_severity === 'urgent' ? '#ff8d8d' : detection.review_severity === 'warn' ? '#f0c971' : '#9be6ce';
+    context.strokeStyle = color; context.fillStyle = color; context.lineWidth = 1.4;
     context.strokeRect(a[0], a[1], z[0] - a[0], z[1] - a[1]);
     context.font = '10px monospace';
-    context.fillText(detection.confidence === null ? 'person' : Math.round(detection.confidence * 100) + '%', a[0], Math.max(r.y + 10, a[1] - 3));
+    const label = detection.track_id != null ? trackLabel(detection) : detection.confidence === null ? 'person' : Math.round(detection.confidence * 100) + '%';
+    context.fillText(label, a[0], Math.max(r.y + 10, a[1] - 3));
   }
   overlay.dataset.boxCount = currentDetections.length;
 }
@@ -93,7 +107,7 @@ function once(target, event, timeout = 20000) {
 }
 async function connect(info, isReference = false) {
   const generation = ++sourceGeneration;
-  video.pause(); clearDisplay(); cache.clear(); importedFrames = null; job = null; config = null; source = null;
+  video.pause(); clearDisplay(); cache.clear(); resetReview(); importedFrames = null; job = null; config = null; source = null;
   $('resume-inference').hidden = true; $('zoom-warning').hidden = true;
   const ready = once(video, 'loadeddata'); video.src = info.url; video.load(); await ready;
   if (generation !== sourceGeneration) return;
@@ -105,6 +119,7 @@ async function connect(info, isReference = false) {
   $('viewer-title').textContent = isReference ? 'REFERENCE / WAVE POOL' : 'UPLOADED RECORDING';
   $('viewer-meta').textContent = info.width + ' × ' + info.height + ' · RECORDED';
   corners = isReference ? [[.085, .08], [.95, .14], [.96, .91], [.22, .91]] : [[.15, .2], [.85, .2], [.9, .85], [.1, .85]];
+  $('measured-plane').checked = false;
   const target = Math.min(isReference ? 8 : .1, video.duration / 2);
   if (Math.abs(video.currentTime - target) > .001) {const seeked = once(video, 'seeked'); video.currentTime = target; await seeked;}
   frameTime = video.currentTime;
@@ -124,7 +139,7 @@ $('video-file').onchange = async e => {
 $('back-button').onclick = async () => {
   try {if (job && ['running', 'starting'].includes(job.state)) await api('/api/jobs/' + job.id + '/cancel', {method: 'POST'});}
   catch (e) {message(e.message); return;}
-  sourceGeneration++; video.pause(); source = null; job = null; cache.clear(); clearDisplay(); setPhase('source');
+  sourceGeneration++; video.pause(); source = null; job = null; cache.clear(); resetReview(); clearDisplay(); setPhase('source');
 };
 function readConfig() {
   const width = Number($('pool-width').value), length = Number($('pool-length').value), depth = Number($('pool-depth').value), water = Number($('water-height').value), end = Number($('mapping-end').value);
@@ -132,17 +147,17 @@ function readConfig() {
   if (![width, length, depth, water, end].every(Number.isFinite) || width < 2 || width > 100 || length < 2 || length > 100 || depth < .3 || depth > 10 || water < .1 || water > depth) throw Error('Use a water height above zero and no higher than the wall; width/length 2–100 m and wall height 0.3–10 m.');
   if (end <= video.currentTime + .05 || end > video.duration + .1) throw Error('Mapping end must be after the current frame and within the recording.');
   if (source.sha256 === reference?.sha256 && source.mapping_end < source.duration && video.currentTime < source.mapping_end && end > source.mapping_end) throw Error('End this mapping before the reference camera view changes.');
-  return {width, length, depth, water, corners: structuredClone(corners), start: video.currentTime, end, aspect: video.videoWidth / video.videoHeight};
+  return {width, length, depth, water, measured: $('measured-plane').checked, corners: structuredClone(corners), start: video.currentTime, end, aspect: video.videoWidth / video.videoHeight};
 }
 $('scan-button').onclick = async () => {
   try {
-    config = readConfig(); twin?.configure(config); video.pause();
+    config = readConfig(); twin?.configure(config); showPosition(null); $('calibration-kind').textContent = config.measured ? 'User-measured plane' : 'Approximate'; video.pause();
     if (job || importedFrames) {setPhase('twin'); await setView('video'); await refresh(); return;}
     const start = Number($('analysis-start').value), end = Number($('analysis-end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > source.duration + .001) throw Error('Set an analysis interval within the recording.');
     $('scan-button').disabled = true;
     job = await api('/api/jobs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source_id: source.id, start, end})});
-    cache.clear(); setPhase(job.state === 'completed' ? 'twin' : 'scan'); showJob();
+    cache.clear(); resetReview(); setPhase(job.state === 'completed' ? 'twin' : 'scan'); showJob();
     if (job.state === 'completed') await openReview(); else await pollJob();
   } catch (error) {message(error.message);}
   finally {$('scan-button').disabled = false;}
@@ -158,8 +173,10 @@ function showJob() {
   $('scan-detections').textContent = job.frames_analyzed + ' frames analyzed';
   $('delegate').textContent = job.runtime?.provider ?? job.backend;
   $('cancel-job').hidden = !running; $('cancel-scan').disabled = !running;
+  $('new-analysis').hidden = running;
   $('region-size').textContent = config ? config.width + ' × ' + config.length + ' m' : 'Not mapped';
   if (job.error) message(job.error);
+  showReviewAnalysis();
 }
 async function pollJob() {
   if (!job || pollBusy || !['starting', 'running'].includes(job.state)) return;
@@ -181,6 +198,10 @@ async function cancel() {
   catch (error) {message(error.message);}
 }
 $('cancel-scan').onclick = cancel; $('cancel-job').onclick = cancel;
+$('new-analysis').onclick = () => {
+  sourceGeneration++; video.pause(); video.currentTime = config?.start ?? 0; job = null; importedFrames = null; cache.clear(); resetReview(); clearDisplay();
+  setPhase('calibrate'); $('scan-button').textContent = 'Analyze recording';
+};
 async function openReview() {
   setPhase('twin'); await setView('video'); showJob();
   if (!job || importedFrames) return;
@@ -197,30 +218,38 @@ $('review-progress').onclick = () => openReview().catch(e => message(e.message))
 async function refresh() {
   if (!source || !job || importedFrames || refreshPending) return;
   refreshPending = true;
-  try {await cache.ensure(video.currentTime, job.state === 'completed');}
+  try {
+    if (reviewAnalysis?.state === 'completed') await trackCache.ensure(video.currentTime, true);
+    else await cache.ensure(video.currentTime, job.state === 'completed');
+  }
   catch (error) {message(error.message);}
   finally {refreshPending = false;}
 }
 function updateDisplay() {
   if (!source || video.seeking) {clearDisplay(); return;}
   const time = video.paused ? video.currentTime : frameTime;
-  const frames = importedFrames ?? cache.frames(time);
+  const tracked = !importedFrames && reviewAnalysis?.state === 'completed';
+  const frames = importedFrames ?? (tracked ? trackCache.frames(time) : cache.frames(time));
   const observation = observationAt(frames, time);
-  currentDetections = observation ? observation.detections.filter(d => d.confidence === null || d.confidence >= threshold) : [];
+  currentTracks = tracked && observation ? observation.tracks : [];
+  currentDetections = observation ? (tracked ? currentTracks.filter(t => ['visible', 'outside'].includes(t.state) && Math.abs(t.last_seen - observation.media_time) < .001) : observation.detections).filter(d => d.confidence === null || d.confidence >= threshold) : [];
+  renderTrackStates(tracked ? observation : null);
   $('person-count').textContent = observation ? currentDetections.length : '—';
   $('inference-time').textContent = observation?.inference_ms ? Math.round(observation.inference_ms) : '—';
   $('pool-count').textContent = observation && mappingValid() ? currentDetections.filter(d => inside(boxAnchor(d.bbox_xyxy_normalized), config.corners)).length : '—';
   if (phase === 'twin' || phase === 'scan') $('tracking-status').textContent = observation
-    ? currentDetections.length + ' person boxes · ' + (importedFrames ? 'imported observations' : 'RF-DETR Nano') + (mappingValid() ? '' : ' · pool outline needs calibration')
+    ? currentDetections.length + ' person boxes · ' + (importedFrames ? 'imported observations' : tracked ? 'persistent track replay' : 'RF-DETR Nano') + (mappingValid() ? '' : ' · pool outline needs calibration')
     : 'Analysis unavailable at this time';
+  $('view-badge').textContent = stage.dataset.view === 'video' ? tracked ? 'TRACK REPLAY / REVIEW' : 'PERSON DETECTIONS' : 'APPROXIMATE POSITIONS';
   if (twin && stage.dataset.view !== 'video') twin.updatePeople(mappingValid() ? currentDetections : []);
   $('zoom-warning').hidden = stage.dataset.view === 'video' || !config || mappingValid();
 }
 async function setView(view) {
+  showPosition(null);
   if (view !== 'video') {
     try {
       if (!config) throw Error('Map the pool before opening the optional 3D view.');
-      if (!twin) {const {PoolTwin} = await import('./twin.js'); twin = new PoolTwin($('three-canvas'), video);}
+      if (!twin) {const {PoolTwin} = await import('./twin.js'); twin = new PoolTwin($('three-canvas'), video, showPosition);}
       twin.configure(config);
     } catch (error) {message('3D view unavailable: ' + error.message); view = 'video';}
   }
@@ -264,6 +293,131 @@ $('export-button').onclick = () => {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
   const link = document.createElement('a'); link.href = url; link.download = 'poolside-setup.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
+function trackLabel(track) {
+  const state = track.state === 'missing' ? 'lost' : track.state === 'outside' ? 'visible outside' : track.state === 'visible' ? 'visible' : 'unknown';
+  return '#' + track.track_id + ' · ' + state + (track.missing_seconds > 0 ? ' · ' + track.missing_seconds.toFixed(1) + 's missing' : '') + (track.reason ? ' · ' + track.reason.replaceAll('_', ' ') : '');
+}
+function renderTrackStates(frame) {
+  const key = frame ? frame.media_time + ':' + frame.quality : 'unavailable';
+  if (trackRenderKey === key) return;
+  trackRenderKey = key;
+  const tracks = frame?.tracks ?? [], visible = tracks.filter(t => ['visible', 'outside'].includes(t.state)).length;
+  $('track-states').textContent = frame ? visible + ' visible · ' + tracks.filter(t => t.state === 'missing').length + ' lost · quality: ' + frame.quality + '. Lost positions are not displayed as current detections.' : 'Track states unknown: analysis unavailable at this time.';
+  $('track-details').replaceChildren(...tracks.map(track => {
+    const chip = document.createElement('span'); chip.className = 'track-chip'; chip.dataset.severity = track.review_severity ?? 'none'; chip.textContent = trackLabel(track); return chip;
+  }));
+}
+function resetReview() {
+  reviewAnalysis = null; incidents = []; selectedIncident = null; seenEvents.clear(); trackCache.clear(); trackRenderKey = ''; currentTracks = [];
+  $('event-review').hidden = true; $('incident-detail').hidden = true; $('incident-list').replaceChildren();
+  $('incident-video').pause(); $('incident-video').removeAttribute('src'); $('incident-video').load();
+  showReviewAnalysis();
+}
+function reviewRange() {return config && job ? {start: Math.max(config.start, job.start), end: Math.min(config.end, job.end)} : null;}
+function showReviewAnalysis() {
+  const state = reviewAnalysis?.state ?? 'not_started', range = reviewRange();
+  const running = ['queued', 'running'].includes(state);
+  $('build-review').disabled = reviewSubmitting || !job || job.state !== 'completed' || !!importedFrames || state !== 'not_started' || !range || range.end <= range.start;
+  $('build-review').textContent = reviewSubmitting ? 'Starting review analysis…' : 'Build review events';
+  $('review-range').textContent = reviewAnalysis?.config ? 'Saved review interval: ' + timeLabel(reviewAnalysis.config.start) + '–' + timeLabel(reviewAnalysis.config.end) + '. Configuration is fixed for this job; run a new analysis to change it.' : range && range.end > range.start ? 'Review interval: ' + timeLabel(range.start) + '–' + timeLabel(range.end) + ' (pool mapping ∩ analyzed footage). Missing visibility: review after 5s; urgent after 12s.' : 'The pool mapping must overlap the analyzed interval.';
+  $('review-analysis-status').textContent = state === 'not_started' ? importedFrames ? 'Return to server results to build review events.' : job?.state === 'completed' ? 'Ready to build tracks and visibility-loss review candidates.' : 'Complete person analysis to build persistent tracks and visibility-loss review events.' : 'Review analysis: ' + state + (Number.isFinite(reviewAnalysis.progress) ? ' · ' + Math.round(reviewAnalysis.progress * 100) + '%' : '') + (reviewAnalysis.error ? ' · ' + reviewAnalysis.error : '');
+  $('review-analysis-progress').hidden = !running;
+  if (Number.isFinite(reviewAnalysis?.progress)) $('review-analysis-progress').value = reviewAnalysis.progress;
+  else $('review-analysis-progress').removeAttribute('value');
+  $('event-review').hidden = state === 'not_started';
+}
+$('build-review').onclick = async () => {
+  const range = reviewRange(); if (!range || !job || reviewSubmitting) return;
+  const id = job.id, generation = sourceGeneration;
+  reviewSubmitting = true; showReviewAnalysis();
+  try {
+    const result = await api('/api/jobs/' + id + '/review-analysis', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({corners: config.corners, ...range, low_threshold: .1, high_threshold: .25, new_track_threshold: .25, warn_seconds: 5, urgent_seconds: 12})});
+    if (generation !== sourceGeneration || job?.id !== id) return;
+    reviewAnalysis = result; trackCache.clear(); await pollReview(); await refresh();
+  } catch (error) {message(error.message);}
+  finally {reviewSubmitting = false; showReviewAnalysis();}
+};
+async function pollReview() {
+  if (!job || job.state !== 'completed' || reviewBusy) return;
+  reviewBusy = true; const id = job.id, generation = sourceGeneration;
+  try {
+    const result = await api('/api/jobs/' + id + '/review-analysis');
+    if (generation !== sourceGeneration || job?.id !== id) return;
+    const completedNow = result.state === 'completed' && reviewAnalysis?.state !== 'completed';
+    reviewAnalysis = result; showReviewAnalysis();
+    if (completedNow) {trackCache.clear(); clearDisplay(); await refresh();}
+    if (result.state === 'not_started') return;
+    const response = await api('/api/jobs/' + id + '/incidents');
+    if (generation !== sourceGeneration || job?.id !== id) return;
+    let newlyPending = false;
+    for (const incident of response.incidents) {
+      if (!seenEvents.has(incident.id) && (incident.review?.decision ?? 'needs_review') === 'needs_review') newlyPending = true;
+      seenEvents.add(incident.id);
+    }
+    incidents = response.incidents;
+    if (newlyPending && soundEnabled) playAlert();
+    renderIncidents();
+    if (selectedIncident) renderIncidentDetail(false);
+  } catch (error) {$('review-analysis-status').textContent = 'Review service error: ' + error.message;}
+  finally {reviewBusy = false;}
+}
+function renderIncidents() {
+  const pending = incidents.filter(i => (i.review?.decision ?? 'needs_review') === 'needs_review').length;
+  $('incident-count').textContent = pending + ' need review · ' + incidents.length + ' total events';
+  const filter = $('incident-filter').value;
+  const filtered = incidents.filter(i => filter === 'all' || (i.review?.decision ?? 'needs_review') === (filter === 'pending' ? 'needs_review' : filter));
+  $('incident-list').replaceChildren(...filtered.map(incident => {
+    const button = document.createElement('button'); button.className = 'incident-card'; button.dataset.incidentId = incident.id; button.dataset.severity = incident.severity === 'urgent' ? 'urgent' : 'warn';
+    button.setAttribute('aria-pressed', String(incident.id === selectedIncident));
+    button.textContent = '#' + incident.track_id + ' · ' + timeLabel(incident.trigger_time) + ' · ' + incident.severity + ' concern';
+    const detail = document.createElement('small'); detail.textContent = (incident.reason ?? incident.kind).replaceAll('_', ' ') + ' · ' + (incident.review?.decision ?? 'needs_review').replaceAll('_', ' '); button.append(detail);
+    button.onclick = () => {selectedIncident = incident.id; renderIncidents(); renderIncidentDetail(true);}; return button;
+  }));
+  if (!filtered.length) {const empty = document.createElement('p'); empty.textContent = incidents.length ? 'No events match this filter.' : 'No review candidates available. This does not establish swimmer safety.'; $('incident-list').append(empty);}
+}
+function renderIncidentDetail(replaceNote) {
+  const incident = incidents.find(i => i.id === selectedIncident); $('incident-detail').hidden = !incident; if (!incident) return;
+  $('incident-title').textContent = 'Track #' + incident.track_id + ' · ' + incident.severity + ' review concern';
+  $('incident-reason').textContent = (incident.reason ?? incident.kind).replaceAll('_', ' ') + ' · started ' + timeLabel(incident.start_time) + ' · triggered ' + timeLabel(incident.trigger_time) + ' · evidence: ' + (incident.evidence ?? 'visibility-only') + (incident.resolution_reason ? ' · ' + incident.resolution_reason.replaceAll('_', ' ') : '');
+  $('incident-decision').textContent = 'Review: ' + (incident.review?.decision ?? 'needs_review').replaceAll('_', ' ') + (incident.review?.updated_at ? ' · saved ' + new Date(incident.review.updated_at * 1000).toLocaleString() : '');
+  if (replaceNote) {$('incident-note').value = incident.review?.note ?? ''; $('review-save-status').textContent = '';}
+  const ready = incident.clip?.state === 'ready', clipUrl = '/api/jobs/' + job.id + '/incidents/' + encodeURIComponent(incident.id) + '/clip';
+  $('download-clip').hidden = !ready; $('incident-video').hidden = !ready;
+  $('clip-status').textContent = 'Saved clip: ' + (incident.clip?.state ?? 'pending') + (incident.clip?.partial ? ' · partial context at recording boundary' : '') + (incident.clip?.error ? ' · ' + incident.clip.error : '');
+  if (ready) {
+    $('download-clip').href = clipUrl; $('download-clip').download = 'review-' + incident.id + '.mp4';
+    if ($('incident-video').getAttribute('src') !== clipUrl) {$('incident-video').src = clipUrl; $('incident-video').load();}
+  } else {$('incident-video').pause(); $('incident-video').removeAttribute('src');}
+}
+$('incident-filter').onchange = renderIncidents;
+$('seek-incident').onclick = async () => {
+  const incident = incidents.find(i => i.id === selectedIncident); if (!incident) return;
+  video.pause(); await setView('video'); video.currentTime = Math.max(0, incident.clip?.start ?? incident.start_time); $('stage').scrollIntoView({behavior: 'smooth', block: 'center'});
+};
+document.querySelectorAll('[data-decision]').forEach(button => button.onclick = async () => {
+  if (!selectedIncident || !job) return;
+  const id = selectedIncident, jobId = job.id, generation = sourceGeneration;
+  const buttons = [...document.querySelectorAll('[data-decision]')]; buttons.forEach(b => b.disabled = true);
+  try {
+    const result = await api('/api/jobs/' + jobId + '/incidents/' + encodeURIComponent(id), {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({decision: button.dataset.decision, note: $('incident-note').value})});
+    if (generation !== sourceGeneration || job?.id !== jobId) return;
+    incidents = incidents.map(i => i.id === id ? result : i); renderIncidents(); if (selectedIncident === id) {renderIncidentDetail(false); $('review-save-status').textContent = 'Review saved.';}
+  } catch (error) {$('review-save-status').textContent = 'Could not save review: ' + error.message;}
+  finally {buttons.forEach(b => b.disabled = false);}
+});
+function playAlert() {
+  if (!alertAudio || alertAudio.state !== 'running') return;
+  const oscillator = alertAudio.createOscillator(), gain = alertAudio.createGain();
+  oscillator.connect(gain); gain.connect(alertAudio.destination); oscillator.frequency.value = 660;
+  gain.gain.setValueAtTime(.06, alertAudio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, alertAudio.currentTime + .3);
+  oscillator.start(); oscillator.stop(alertAudio.currentTime + .3);
+}
+$('enable-alerts').onclick = async () => {
+  try {
+    if (!soundEnabled) {alertAudio ??= new (window.AudioContext || window.webkitAudioContext)(); await alertAudio.resume(); incidents.forEach(i => seenEvents.add(i.id));}
+    soundEnabled = !soundEnabled; $('enable-alerts').textContent = soundEnabled ? 'Disable sound' : 'Enable sound'; $('enable-alerts').setAttribute('aria-pressed', String(soundEnabled));
+  } catch (error) {message('Sound unavailable: ' + error.message);}
+};
 function animate(now) {
   updateDisplay(); draw();
   if (twin && stage.dataset.view !== 'video') twin.render(now);
@@ -273,6 +427,7 @@ function animate(now) {
 }
 stage.dataset.view = 'video'; requestAnimationFrame(animate);
 setInterval(() => {pollJob(); refresh();}, 500);
+setInterval(pollReview, 2000);
 try {
   reference = await api('/api/reference'); $('reference-button').disabled = !reference.available;
   const health = await api('/api/health');

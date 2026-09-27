@@ -1,3 +1,5 @@
+> Current implementation (2026-09-26): pretrained RF-DETR Nano person detection, server-side recorded-video jobs and cached 2D replay. Pose models and temporary IDs have been removed. See [RF-DETR implementation and measured results](rfdetr-implementation.md) and [run instructions](../../frontend/README.md). Earlier model selections below are historical; tracking, drowning assessment and incident review remain later work.
+
 # SAM analysis: pool monitoring and hackathon feasibility
 
 > Latest decision: [ML system and camera-to-review workflow](ml-system-decision.md). It records the implemented YOLOv8 baseline, precise tracking/event/clip design, new checkpoint audits, temporal-model direction and Claude Code review. The research below is earlier context.

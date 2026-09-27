@@ -50,6 +50,19 @@ def test_policy_frozen_before_locked_evaluation(tmp_path):
         select(annotation, candidates, policy)
 
 
+def test_evaluate_rejects_dev_labels_changed_after_policy_freeze(tmp_path):
+    labels, predictions = fixture_data()
+    annotation = tmp_path / "labels.json"; candidates = tmp_path / "predictions.json"
+    policy = tmp_path / "policy.json"; report = tmp_path / "report.json"
+    write_json(annotation, labels); write_json(candidates, predictions)
+    select(annotation, candidates, policy)
+    changed = read_json(annotation)
+    changed["frames"][0]["people"][0]["in_pool"] = False
+    write_json(annotation, changed)
+    with pytest.raises(ValueError, match="Development labels changed"):
+        evaluate(annotation, candidates, policy, report)
+
+
 def test_no_positive_matches_is_a_failed_gate(tmp_path):
     labels, predictions = fixture_data()
     for frame in predictions["frames"]:

@@ -48,7 +48,10 @@ async def main(base):
         await page.fill("#water-height", "1.1")
         await page.fill("#analysis-start", "8")
         await page.fill("#analysis-end", "10")
-        await page.click("#scan-button")
+        async with page.expect_response(lambda r: r.url.endswith('/api/jobs') and r.request.method == 'POST') as submitted:
+            await page.click("#scan-button")
+        submission = await submitted.value
+        assert submission.status == 202, await submission.text()
         await page.wait_for_function("!document.querySelector('#twin-panel').hidden", timeout=90000)
         await page.evaluate("video.currentTime=8.1")
         await page.wait_for_function("Number(document.querySelector('#person-count').textContent)>0", timeout=15000)
@@ -106,10 +109,58 @@ async def main(base):
         await mobile.wait_for_function("!document.querySelector('#reference-button').disabled")
         assert await mobile.evaluate("document.documentElement.scrollWidth <= innerWidth")
         await mobile.screenshot(path=str(OUT / "rfdetr-mobile.png"), full_page=True)
+        annotation = await browser.new_page(viewport={"width": 1440, "height": 1000})
+        annotation.on("pageerror", lambda e: errors.append(str(e)))
+        await annotation.goto(base + "/annotate.html")
+        await annotation.locator("#folder").set_input_files(str(OUT / "evaluation/reference"))
+        await annotation.wait_for_function("document.querySelector('#canvas').width===1280")
+        bounds = await annotation.locator("#canvas").bounding_box()
+        await annotation.mouse.move(bounds["x"] + 200, bounds["y"] + 200)
+        await annotation.mouse.down()
+        await annotation.mouse.move(bounds["x"] + 240, bounds["y"] + 260)
+        await annotation.mouse.up()
+        assert await annotation.locator("#person option").count() == 1
+        await annotation.locator("#reviewed").check()
+        async with annotation.expect_download() as download_info:
+            await annotation.click("#save")
+        download = await download_info.value
+        exported = json.loads(Path(await download.path()).read_text())
+        assert exported["frames"][0]["reviewed"] and len(exported["frames"][0]["people"]) == 1
+        # Do not save this synthetic browser-test label into the actual evaluation bundle.
+        import av
+        import numpy as np
+        from fractions import Fraction
+        vfr_path = OUT / "browser-vfr.mp4"
+        with av.open(str(vfr_path), 'w') as container:
+            stream = container.add_stream('libx264', rate=25)
+            stream.width, stream.height, stream.pix_fmt = 160, 96, 'yuv420p'
+            stream.time_base = stream.codec_context.time_base = Fraction(1, 1000)
+            stream.options = {'bf': '0'}
+            for pts in [0, 33, 100, 250, 460, 500, 710, 840]:
+                frame = av.VideoFrame.from_ndarray(np.zeros((96,160,3), dtype=np.uint8), format='rgb24')
+                frame.pts, frame.time_base = pts, Fraction(1,1000)
+                for packet in stream.encode(frame): container.mux(packet)
+            for packet in stream.encode(): container.mux(packet)
+        vfr_page = await browser.new_page()
+        await vfr_page.goto(base)
+        await vfr_page.locator('#video-file').set_input_files(str(vfr_path))
+        await vfr_page.wait_for_function("!document.querySelector('#calibrate-panel').hidden")
+        await vfr_page.click('#scan-button')
+        await vfr_page.wait_for_function("!document.querySelector('#twin-panel').hidden", timeout=30000)
+        await vfr_page.wait_for_function("document.querySelector('#person-count').textContent==='0'")
+        vfr_timing = []
+        for target in [.25, .46, .71, .84]:
+            actual = await vfr_page.evaluate("""t=>new Promise((resolve,reject)=>{
+              const timeout=setTimeout(()=>reject(Error('No VFR presented frame')),5000);
+              video.requestVideoFrameCallback((_,m)=>{clearTimeout(timeout);resolve(m.mediaTime);});
+              video.currentTime=t+0.001;
+            })""", target)
+            assert abs(actual-target)<.001, (target, actual)
+            vfr_timing.append({'decoder_time': target, 'browser_time': actual})
         forbidden = [url for url in requests if any(s in url.lower() for s in ["pose-worker", "yolov8n-pose", "mediapipe", "landmarker", "vision_bundle"])]
         assert not forbidden, forbidden
         assert not errors, errors
-        report = {"status": "passed", "real_rf_detr": metrics, "timing_checks": timing,
+        report = {"status": "passed", "real_rf_detr": metrics, "timing_checks": timing, "vfr_timing_checks": vfr_timing,
                   "synthetic_checks": ["150 boxes", "empty vs unavailable", "legacy import", "pool boundary"],
                   "page_errors": errors, "pose_network_requests": forbidden}
         (OUT / "rfdetr-browser-results.json").write_text(json.dumps(report, indent=2), encoding="utf-8")

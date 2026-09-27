@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from backend.common import ROOT, REFERENCE_SHA, digest, probe, read_json, write_json
 from backend.jobs import JobManager
+from backend.review import install_review_routes
 
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/javascript", ".mjs")
@@ -42,6 +43,7 @@ def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, bac
     @asynccontextmanager
     async def lifespan(app):
         yield
+        await asyncio.to_thread(app.state.review.close)
         await asyncio.to_thread(manager.close)
 
     app = FastAPI(title="Poolside person detection", lifespan=lifespan)
@@ -171,6 +173,7 @@ def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, bac
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
 
+    install_review_routes(app, manager, get_source, data)
     app.mount("/", StaticFiles(directory=ROOT / "frontend", html=True), name="frontend")
     return app
 

@@ -1,65 +1,135 @@
-# frontend
+﻿# Poolside person detection
 
-Owner: Person 5 (Frontend)
+The implemented milestone is **recorded video → RF-DETR Nano person boxes → timestamped replay**. The browser uploads recordings to a processing server. Pose models, skeletons, and temporary person IDs have been removed.
 
-One page: live camera, alerts with sound, clip playback, "confirm" or "false alarm" button that sends the label back to the dataset.
+The 2D video is the default. The optional 3D view displays symbolic pins inside a manually calibrated pool rectangle. Pause and select a pin to inspect estimated X/Z coordinates from corner 1. Corner 1→2 is width; 1→4 is length. Mark the calibration as user-measured only when its dimensions and corners are known. The marker height is assumed at the water surface, and its size is symbolic. There is no drowning classifier, identity tracker, incident recorder, or alert workflow in this milestone. A separate YOLO/timer demo on upstream `main` is not connected to this browser pipeline.
 
-## Implemented onboarding prototype
+## Run the installed application
 
-The current prototype connects a local recording, lets the operator mark four water-region corners and estimate pool dimensions, runs actual person/pose inference, and reveals a simple Three.js pool with synchronized markers and schematic upper-body joints. It includes footage, split, and 3D views, playback/seek controls, setup export, and timestamped tracking import. The broader alert dashboard described above remains integration work.
-
-### Run from the repository root
+From the repository root on this workstation:
 
 ```powershell
-python -m pip install -r backend/requirements.txt
-python frontend/setup_assets.py
-python backend/serve.py --video "path/to/pool-reference.mp4"
+.venv\Scripts\python.exe -m backend.serve --video "..\footage-research\pool-reference.mp4"
 ```
 
-Open **http://127.0.0.1:5173** in Chrome or Edge. Omit `--video` to use the local MP4/WebM import control instead. Dependencies and model weights download once into ignored `frontend/vendor/`; video files are not committed. The provided reference is the [2:09 wave-pool recording](https://www.youtube.com/watch?v=PuAfTA2wf7o). The reference preset stops its initial mapping at 95 seconds because the later camera view changes; inspect and recalibrate a new segment before continuing. `--video` uses this reference preset, so use the local-import control for unrelated recordings.
+Open **http://127.0.0.1:5173**. Connect the reference or upload an H.264 MP4 / WebM. Define the pool outline, choose the analysis interval, then select **Analyze recording**. Results can be reviewed during processing or replayed from the cache afterward.
 
-### Models and rendering
+The display confidence defaults to 0.50 and can be adjusted down to 0.20 without rerunning inference. These thresholds have not passed a human-labeled accuracy gate. Counts are person boxes, not a guaranteed census.
 
-- **Person boxes:** pretrained COCO YOLOv8n, confidence threshold 0.25.
-- **Joints:** pretrained YOLOv8n-pose; only confident upper-body points are displayed. A person with no reliable pose remains a location marker.
-- **Inference:** ONNX Runtime Web 1.22.0, WebGPU with initialization fallback to single-thread WASM CPU. WebGPU uses a full frame plus four overlapping tiles; CPU uses a full frame. `?delegate=CPU` forces CPU initialization. Pinned export URLs and checkpoint hash checks are in `setup_assets.py`.
-- **Optional comparison:** `?model=mediapipe` selects MediaPipe Pose Landmarker Lite. It produced fewer usable detections on this crowded clip during exploratory checks.
-- **Motion/alarms:** there is no trained temporal distress model here. Temporary proximity-based IDs are for display only; Sunny's tracker and Rohan's event engine must provide authoritative identities and alarms.
+## Set up another machine
 
-The transition crossfades from footage through a video-textured water surface into a stylized pool. It is not recovered camera geometry. Four-point planar mapping provides approximate locations; dimensions/water level are operator estimates. Upper-body joints are a camera-facing schematic, not measured 3D anatomy or underwater depth. Occluded/unconfident joints are omitted. The pool depiction does not establish actual airway/submersion state.
+Use one server process per data directory. Model export requires a compatible PyTorch machine; CPU ONNX deployment does not require PyTorch or a browser GPU.
 
-### Timing and performance
+Reference/export environment:
 
-Inference uses source-video timestamps, discards stale results after seeks, and hides outdated observations instead of showing an incorrect zero count. Automatic playback pacing slows the video when inference cannot keep up; very slow processing uses frame stepping. Do not describe this as guaranteed real-time operation at original recording speed.
+```powershell
+python -m venv .venv-reference
+.venv-reference\Scripts\python.exe -m pip install -r backend/requirements-reference.txt
+.venv-reference\Scripts\python.exe -m tools.prepare_rfdetr --video "path/to/pool-reference.mp4"
+```
 
-A browser regression run on this laptop recorded **18 detections, 490 ms processing time, WebGPU, and 0.25× playback** on a sampled frame. These are runtime observations, not an accuracy benchmark; crowded swimmers are still missed and duplicates can occur. No four-camera throughput or drowning-event accuracy has been established.
+The preparation script uses five frames from the reference recording at approximately 8, 22, 45, 70, and 90 seconds. It downloads only the pinned official Nano checkpoint, verifies SHA-256, runs the official SDK, exports FP32 ONNX, and compares input tensors, raw outputs and decoded person boxes. Export and verification artifacts are written under ignored `artifacts/models/rfdetr-nano/`.
 
-### Tracking import contract
+Deployment environment:
 
-Use the tracking import control in the 3D stage. Coordinates are normalized to the original video frame; keypoints, when supplied, must contain all 17 COCO entries as `[x, y, confidence]`. The exact video SHA-256, dimensions, and duration must match. Export setup to obtain the video fingerprint.
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r backend/requirements-dev.txt
+.venv\Scripts\python.exe -m tools.prepare_rfdetr --verify-only
+.venv\Scripts\python.exe -m backend.serve --video "path/to/pool-reference.mp4"
+```
+
+Copy the entire model artifact directory from the export machine before verification. The development requirements include SciPy for the parity/evaluation tools; ordinary serving only needs `backend/requirements.txt`. On POSIX, use the corresponding `.venv/bin/python` executable.
+
+Native Windows ARM uses ONNX graph optimization **BASIC**; tested x64 uses **ALL**. This difference is intentional: default ARM fusion changed tied encoder proposals on one parity frame. The runtime refuses to load an artifact without a passing local parity report matching its model hash, adapter code, provider, ONNX Runtime version and platform. Run verification again after changing these.
+
+If ONNX verification fails, the official Python backend remains available:
+
+```powershell
+.venv-reference\Scripts\python.exe -m backend.serve --backend python --video "path/to/pool-reference.mp4"
+```
+
+`--worker-python PATH` selects a different installed Python for the inference subprocess. `--model-manifest PATH` and `--data-dir PATH` select the model bundle and runtime storage. `--host LAN_ADDRESS` lets browsers on a trusted network connect; this prototype has no authentication and is not a public internet deployment.
+
+Run `python frontend/setup_assets.py` to download optional Three.js assets and the pinned YOLO evaluation baseline. The normal video/detection view works without Three.js. No pose assets are downloaded or requested.
+
+## Runtime behavior
+
+- Official pretrained `RFDETRNano`, `rfdetr==1.11.0`, 384 × 384, FP32, person category resolved from the pinned COCO mapping.
+- RF-specific RGB square resize, half-pixel bilinear interpolation without antialiasing, ImageNet normalization, sigmoid and global top-300 query/class selection. No full-frame NMS.
+- One subprocess job at a time. Playback speed does not drive inference.
+- Target sampling rate: 5 frames per video second, retaining each selected frame's actual presentation timestamp. Low-frame-rate inputs never duplicate observations.
+- Cache: indexed SQLite observations on disk; at most three 10-second windows in the browser.
+- A sampled result remains visible for at most 0.3 seconds. An analyzed empty frame displays **0**; missing/failed/stale analysis displays **—**.
+- Pool membership uses box bottom-center as a provisional approximation. Detection continues after mapping expiry; pool counts and 3D markers require a valid mapping.
+- The known reference view changes around 95 seconds. Its SHA-256, rather than the filename or `--video` flag, enables that preset.
+- Uploads are streamed and hashed by the server, capped at 2 GiB. Media is served with byte-range support. Rotated video, non-square pixels, and frames larger than 3840 × 2160 are rejected.
+- Cancelled or interrupted jobs retain their partial observations and are marked incomplete. The UI can start another analysis.
+
+## API
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/health` | Model configuration and artifact availability |
+| GET | `/api/reference` | Optional reference source metadata |
+| POST | `/api/sources` | Raw MP4/WebM body with matching Content-Type |
+| GET | `/api/sources/{source_id}` | Source metadata and SHA-256 |
+| GET | `/api/sources/{source_id}/video` | Browser video, including Range requests |
+| POST | `/api/jobs` | `{source_id, start, end}`; times in source seconds |
+| GET | `/api/jobs/{job_id}` | Progress, runtime, errors, timing and completion |
+| POST | `/api/jobs/{job_id}/cancel` | Stop worker, preserve incomplete results |
+| GET | `/api/jobs/{job_id}/observations?start=8&end=18` | At most a 30-second window |
+
+Observation shape:
 
 ```json
 {
-  "schema_version": 1,
-  "video": {"sha256": "64-character-file-sha256", "width": 1280, "height": 720, "duration_sec": 129.0},
-  "frames": [
-    {"t_sec": 8.0, "people": [{"track_id": 1, "bbox_xyxy": [0.2, 0.3, 0.3, 0.5]}]},
-    {"t_sec": 8.2, "people": []}
-  ]
+  "schema": "detections/1",
+  "source_id": "video-sha256",
+  "job_id": "server-job-id",
+  "frame_index": 480,
+  "pts": 480480,
+  "time_base": "1/60000",
+  "media_time": 8.008,
+  "status": "analyzed",
+  "detections": [
+    {"bbox_xyxy_normalized": [0.2, 0.3, 0.3, 0.5], "confidence": 0.75, "class_name": "person"}
+  ],
+  "inference_ms": 140.0
 }
 ```
 
-The example is a schema illustration; replace its fingerprint and values with measured data. Frames must be time-ordered. Files are limited to 50 MB, 10,000 frames and 100 people per frame. Observations older than 0.35 source seconds are hidden; there is no interpolation across missing observations. Importing results does not independently verify their accuracy. This sidecar is an observation format, separate from the team's incident/event schema.
+Values above illustrate the schema, not actual detections. Frame index, PTS and media time are recorded from the decoded video. The job manifest includes source metadata/hashes, model hashes, package versions, sampling policy, runtime and code fingerprints.
 
-### Validation and review
+Legacy `schema_version: 1` result files still import using video SHA-256, dimensions and duration, with `frames[].t_sec` and `people[].bbox_xyxy`. Former identity and keypoint fields are ignored. Missing legacy confidence is displayed as unknown. Imports are capped at 20 MiB with no 100-person truncation.
+
+## Evaluation and annotation
+
+Read [RF-DETR implementation and measured results](../docs/samkwak188/rfdetr-implementation.md).
+
+The prepared bundle is `artifacts/evaluation/reference/`: 16 development frames, 8 locked later frames, image hashes, unreviewed annotation templates, and RF-DETR/YOLO candidate files. **These templates are not ground truth.**
+
+Open **http://127.0.0.1:5173/annotate.html**, select that folder, draw person boxes, correct pool membership and visibility tags, inspect at 200%, and mark each completed frame reviewed. Download `annotations-reviewed.json` into the same folder. A second reviewer should independently annotate two frames to establish a consistent visible-extent policy. Locked frames should not be labeled from model suggestions.
 
 ```powershell
-python -m pip install pytest httpx playwright
-python -m pytest backend/test_serve.py -q --basetemp artifacts/pytest-server
-# With the reference server running and Chrome installed:
-python -X utf8 frontend/browser_smoke.py
+.venv\Scripts\python.exe -m tools.evaluate_detection select --labels artifacts/evaluation/reference/annotations-reviewed.json --candidates artifacts/evaluation/reference/rfdetr-full.json --output artifacts/evaluation/reference/rfdetr-policy.json
+.venv\Scripts\python.exe -m tools.evaluate_detection evaluate --labels artifacts/evaluation/reference/annotations-reviewed.json --candidates artifacts/evaluation/reference/rfdetr-full.json --policy artifacts/evaluation/reference/rfdetr-policy.json --output artifacts/evaluation/reference/rfdetr-locked-report.json
 ```
 
-The server checks passed (3 tests: reference availability/fingerprint, media byte ranges, MIME handling). The browser check passed with real model inference, geometry/timestamp/ID checks, rapid paused seeks, invalidation after the view change, tracking import gaps and mobile layout; no page errors were recorded. Screenshots/results go into ignored `artifacts/`.
+The selector maximizes development recall subject to precision ≥90%, a nonzero true-positive count and threshold ≥0.20. It compares the two pool anchors using ground-truth boxes. The frozen policy cannot be overwritten; locked evaluation refuses changed predictions and an existing output. Run YOLO through the same commands with its own candidates and policy.
 
-Claude Code was consulted in two read-only reviews using the CLI's `claude-opus-5-5` model and `xhigh` effort. Feedback informed timestamp handling, stale-result suppression, seek refresh, failure visibility, calibration validity and tile-boundary filtering. This was a code/design review, not an independent accuracy or safety certification. The paper audit is documented separately in [YOLO11-LiB analysis](../docs/samkwak188/yolo11-lib-paper-analysis.md).
+Full-frame and tiled candidate generation are available through `python -m tools.evaluate_detection predict --help`. Tiling is an offline experiment, not an automatically promoted production setting. It uses one full frame plus six overlapping square crops and cross-pass NMS at IoU 0.5 or 0.7; both detectors receive identical crops. Full-frame RF-DETR receives no NMS.
+
+Metrics include one-to-one IoU-0.50 precision/recall, duplicate false positives, size/partial-person groups, ignored regions, pool-membership errors, and development AP50 over candidates above 0.05. The locked frames are from the same camera/session; another recording is required before claiming generalization.
+
+## Verification
+
+```powershell
+.venv\Scripts\python.exe -m pytest backend tools/test_evaluate_detection.py -q --basetemp artifacts/pytest-rfdetr
+.venv\Scripts\python.exe frontend/browser_smoke.py
+.venv\Scripts\python.exe frontend/surface_geometry_smoke.py
+```
+
+The browser test needs Chrome, the reference server, prepared evaluation frames and verified model artifacts. It runs real inference and tests normal-speed replay, seek/cache behavior, presentation timestamps, more than 100 boxes, empty versus unavailable observations, mapping expiry, legacy import, mobile layout, no pose requests, and annotation export. Synthetic acceptance fixtures are explicitly separate from accuracy labels.
+
+Screenshots and detailed results are saved under ignored `artifacts/`. Recordings, weights, and runtime environments are not committed.

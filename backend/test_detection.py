@@ -41,6 +41,24 @@ def test_preprocess_normalization_channel_order_and_half_pixel():
     assert result.dtype == np.float32 and result.shape == (1, 3, 1, 1)
 
 
+def test_status_replace_retries_windows_reader_lock(tmp_path, monkeypatch):
+    import os
+    path = tmp_path / "status.json"
+    write_json(path, {"state": "starting"})
+    replace = os.replace
+    calls = []
+    def temporarily_locked(source, destination):
+        calls.append(1)
+        if len(calls) < 3:
+            assert read_json(path)["state"] == "starting"
+            raise PermissionError("reader still holds file")
+        replace(source, destination)
+    monkeypatch.setattr("backend.common.os.replace", temporarily_locked)
+    write_json(path, {"state": "completed"})
+    assert read_json(path)["state"] == "completed" and len(calls) == 3
+    assert not list(tmp_path.glob("*.tmp"))
+
+
 def test_decoder_keeps_150_people_without_nms_or_yolo_class_zero():
     boxes = np.tile([.5, .5, .1, .1], (300, 1)).astype(np.float32)
     logits = np.full((300, 91), -20., dtype=np.float32)

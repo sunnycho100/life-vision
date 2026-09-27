@@ -10,15 +10,15 @@ Status: 12-hour hackathon build. The plan is agreed, the MuJoCo simulation works
 1. [docs/global/architecture.md](docs/global/architecture.md): how it works, data contracts, code layout
 2. [docs/global/decisions.md](docs/global/decisions.md): what we agreed on and why
 3. [docs/global/milestones.md](docs/global/milestones.md): what each person delivers, hour by hour
-4. [presentation/slides/final/life-vision-hackathon-deck-clean.pptx](presentation/slides/final/life-vision-hackathon-deck-clean.pptx): final hackathon slide deck in a clean, high-legibility healthcare style, with speaker notes
-5. [presentation/presenter-script-final.md](presentation/presenter-script-final.md): timed 5:30 presentation script, demo checklist, and judge Q&A
+4. [presentation/slides/final/life-vision-team-refined.pptx](presentation/slides/final/life-vision-team-refined.pptx): final team presentation with the decision timeline, ownership, verified health context, editable charts, and speaker notes
+5. [presentation/presenter-script-team-refined.md](presentation/presenter-script-team-refined.md): timed 5:30 team script, live-demo checklist, evidence caveats, and judge Q&A
 6. [docs/presentation.md](docs/presentation.md): supporting presentation narrative and failure plan
 
 Continuing in Cursor or another coding environment? Also read [`CURSOR_HANDOFF.md`](CURSOR_HANDOFF.md).
 
-## Frontend interaction demo
+## Review app
 
-Open [`frontend/index.html`](frontend/index.html) directly, or serve the repository and visit `/frontend/`. It accepts a pool video and demonstrates the Matrix-style activation, tracking overlays, green, yellow, and red decisions, timers, alerts, and incident history with scripted model results.
+Sam's local review app lives in [`frontend/`](frontend/) with its server in [`backend/`](backend/). It runs RF-DETR Nano and the person tracker over a pool video and shows "Person N" boxes that turn yellow and red when someone stays missing. Setup is in [`frontend/README.md`](frontend/README.md).
 
 Old research lives in [docs/archive/](docs/archive/).
 

@@ -1,6 +1,5 @@
 # backend
 
-- `pipeline/` (Sunny, sunnycho100): video source, detector wrapper, tracker. Writes `tracks.json` (contract A).
-- `events/` (Rohan, rsusarla3): event engine. Reads `tracks.json` and `<video>.pool.json`, writes `results.json` (contract B).
+Local server for the review app in [frontend/](../frontend/). `serve.py` runs a FastAPI server, `worker.py` runs RF-DETR Nano (`detector.py`) and the person tracker (`tracking.py`) over the video, and results are stored per job in SQLite. See [frontend/README.md](../frontend/README.md) for how to run it.
 
 Contracts: [docs/global/architecture.md](../docs/global/architecture.md#data-contracts).

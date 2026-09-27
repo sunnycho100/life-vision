@@ -11,7 +11,8 @@ See [docs/global/architecture.md](../docs/global/architecture.md).
 | File | What |
 |---|---|
 | `train_yolo.py` | Fine-tunes COCO-pretrained `yolo11n.pt` on Isaac Sim frames with 2 classes: `swimming` (head above or partly above water) and `underwater` (head fully under). |
-| `detect_drowning.py` | Runs the model with ByteTrack on a video. Keeps an underwater timer per person, including people the tracker loses, with hysteresis so one-frame class flickers don't reset it. Raises WARNING at 5 s under, and ALARM at 12 s (or 8 s if the person also stops moving). With `--gt` it scores detection and alarm timing against the sim's ground truth. |
+| `alert_rules.py` | The GREEN / ORANGE / RED rules for coloring a person's box, shared by the sim ground truth and the detector (see below). No dependencies. |
+| `detect_drowning.py` | Runs the model with ByteTrack on a video and colors each person with `alert_rules.py`. Keeps an underwater timer per person, including people the tracker loses, and smooths the class so one-frame flickers don't reset it. With `--gt` it scores detection and the first ORANGE and RED times against the sim's ground truth. |
 | `benchmark_isaac.py` | Scores any detector (Ultralytics weights or zero-shot RF-DETR) on an Isaac clip, split by head above vs fully under water. |
 | `run_pipeline.ps1` | Renders the test clip, trains, and runs detection in one go. |
 
@@ -25,6 +26,33 @@ model\.venv\Scripts\python.exe model\detect_drowning.py --video sim\isaac\_out_t
 ```
 
 Setup: a Python 3.12 venv in `model/.venv` with `torch` (CUDA 12.8 build), `ultralytics`, `lap`, `imageio-ffmpeg`, and `rfdetr` for the RF-DETR comparison. Training uses `workers=0`, because Windows data-loader workers crashed mid-run.
+
+### Box colors: GREEN / ORANGE / RED
+
+One rule set (`alert_rules.py`) colors every box, in the sim ground truth and in the detector output:
+
+| Color | Rule | Norm it follows |
+|---|---|---|
+| **RED** alarm | Head fully under water for **10 s** | Ellis & Associates 10/20 rule: 10 s to recognize an aquatic emergency, 20 s to reach the person. Stricter than ASTM F3698-24, which tests that a system alarms for a motionless submerged toddler dummy by 20 s. Someone who goes under holds their breath for at most about a minute and most lose consciousness within about 2 minutes (NEJM 2012), so 10 s leaves time to reach them conscious. |
+| **RED** alarm | Head fully under for **5 s and not moving** for 2 s | Motionless under water is the strongest sign: Coral MYLO alarms on "motionless, with the head under the surface"; the ASTM test case is a motionless dummy. |
+| **ORANGE** watch | Head fully under for **5 s** | Early warning at half the red time. Our choice, not a published number: tune it on real footage, because kids dive and hold their breath on purpose. |
+| **ORANGE** watch | **Drowning signs at the surface for 3 s**: upright, mouth at the waterline, no headway | Instinctive drowning response (Pia 1974; Vittone, U.S. Coast Guard): head low with the mouth at water level, vertical, not making headway. It lasts only 20 to 60 s before the person goes under. |
+| **ORANGE** watch | Went under after showing drowning signs | A struggling person who slips under isn't fine for the first 5 s. |
+| GREEN | Everything else | |
+
+Red and the "went under after distress" orange clear only after the head has been clearly above water for 2 s.
+
+What each input is, and how we get it:
+
+| Input | Sim ground truth (exact) | Detector (approximated from video) |
+|---|---|---|
+| Head fully under | Head center plus head radius (0.11 m, scaled for children) below the local, wavy water surface | YOLO `underwater` class, majority over the last second, with the timer backdated to the first underwater frame |
+| Not moving | Hip, head, hands and feet moved less than 15% of body height (RMS) in 2 s | Box corners moved less than 15% of the box diagonal (RMS) in 2 s |
+| Mouth at the waterline | Head center less than 0.75 head radius above the water | Not observable with the 2-class model yet (needs pose or a head model), so this orange rule only shows in the ground truth |
+| Upright | Hip-to-neck axis within 30 degrees of vertical | Same as above |
+| No headway | Hip moved less than 30% of body height in 3 s | Same as above |
+
+Sources: [Ellis 10/20 rule](https://jeffellismanagement.com/glossary/10-20-Second-Protection-Rule), [CPSC staff letter on ASTM F3698-24](https://www.cpsc.gov/s3fs-public/June-5-2025-CPSC-Letter-to-ASTM-F15-49-Computer-Vision-Pool-Alarms.pdf), [Coral MYLO FAQ](https://coralmylo.com/faq/), [Szpilman et al., NEJM 2012](https://www.nejm.org/doi/abs/10.1056/NEJMra1013317), [Vittone, "Drowning Doesn't Look Like Drowning"](https://www.army.mil/article/109852/drowning_doesnt_look_like_drowning).
 
 ### Results on the held-out seed-0 clip (300 frames, 1,500 person boxes, 526 with the head fully under)
 

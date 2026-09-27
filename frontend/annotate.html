@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Poolside annotation review</title>
+<style>body{font:15px system-ui;background:#101e23;color:#d6eee4;margin:24px}button,input,select{font:inherit;margin:4px;padding:6px}button{cursor:pointer}header{position:sticky;top:0;background:#101e23;padding:8px;z-index:2}canvas{display:block;touch-action:none;cursor:crosshair}#viewport{overflow:auto;max-height:75vh;border:1px solid #496b61}small{display:block;margin:10px 0;color:#a9c3b8}#error{color:#ffc497}a{color:#9be6ce}</style>
+<header><a href="/">Poolside</a><h1>Person annotation review</h1>
+<label>Open evaluation folder <input id="folder" type="file" webkitdirectory multiple></label>
+<button id="previous">Previous</button><button id="next">Next</button><b id="position">No bundle loaded</b>
+<label>Zoom <select id="zoom"><option value="1">100%</option><option value="2">200%</option><option value="3">300%</option></select></label>
+<label><input id="ignore" type="checkbox">Draw inseparable crowd region</label><button id="undo">Undo last box</button>
+<label><input id="reviewed" type="checkbox">This entire frame is reviewed</label><button id="save">Download reviewed annotations</button>
+<div><label>Selected person: <select id="person"><option>None</option></select></label>
+<label><input id="in-pool" type="checkbox" checked>Inside water region</label>
+<label><input class="tag" value="head_only" type="checkbox">Head only</label><label><input class="tag" value="partial" type="checkbox">Partial</label>
+<label><input class="tag" value="occluded" type="checkbox">Occluded</label><label><input class="tag" value="deck" type="checkbox">On deck</label>
+<button id="delete">Delete selected person</button></div>
+<small>Drag a tight box around every distinguishable person's visible extent, including clearly visible submerged parts. Inspect at 200%. Mark ignore regions only for inseparable crowds. Locked frames are shown without model suggestions. Draw before selecting tags; select a person to correct tags or membership.</small>
+<div id="error" role="status"></div></header><div id="viewport"><canvas id="canvas"></canvas></div>
+<script type="module">
+const $=id=>document.getElementById(id), canvas=$('canvas'), ctx=canvas.getContext('2d');
+let bundle=null, files=new Map(), index=0, selected=-1, image=null, drag=null, history=[];
+const frame=()=>bundle.frames[index];
+function fail(e){$('error').textContent=e.message;}
+function controls(){
+  $('position').textContent=(index+1)+' / '+bundle.frames.length+' · '+frame().split+' · '+frame().time.toFixed(3)+' s';
+  $('reviewed').checked=frame().reviewed;
+  $('person').replaceChildren(...frame().people.map((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent='Person '+(i+1);return o;}));
+  $('person').value=String(selected);
+  const p=frame().people[selected];$('in-pool').checked=p?.in_pool??true;
+  document.querySelectorAll('.tag').forEach(t=>t.checked=Boolean(p?.tags?.includes(t.value)));
+}
+function draw(){
+  if(!image)return;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0);
+  const outline=frame().pool_quad;ctx.beginPath();outline.forEach((p,i)=>{const x=p[0]*canvas.width,y=p[1]*canvas.height;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.closePath();ctx.strokeStyle='#f7faaa';ctx.stroke();
+  for(const [i,p] of frame().people.entries()){
+    const b=p.bbox_xyxy_normalized;ctx.strokeStyle=i===selected?'#ffffff':'#42ff8a';ctx.lineWidth=i===selected?3:2;
+    ctx.strokeRect(b[0]*canvas.width,b[1]*canvas.height,(b[2]-b[0])*canvas.width,(b[3]-b[1])*canvas.height);
+    ctx.fillStyle=ctx.strokeStyle;ctx.font='13px monospace';ctx.fillText(i+1,b[0]*canvas.width,b[1]*canvas.height-3);
+  }
+  ctx.strokeStyle='#ff955d';for(const b of frame().ignore_regions)ctx.strokeRect(b[0]*canvas.width,b[1]*canvas.height,(b[2]-b[0])*canvas.width,(b[3]-b[1])*canvas.height);
+}
+async function show(){
+  const file=files.get(frame().image);if(!file)throw Error('Missing image '+frame().image);
+  const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('');
+  if(hash!==frame().image_sha256)throw Error('Image fingerprint changed.');
+  if(image)image.close();image=await createImageBitmap(file);canvas.width=image.width;canvas.height=image.height;
+  selected=-1;history=[];resize();controls();draw();
+}
+function resize(){canvas.style.width=canvas.width*Number($('zoom').value)+'px';canvas.style.height=canvas.height*Number($('zoom').value)+'px';}
+$('folder').onchange=async e=>{try{
+  files=new Map([...e.target.files].map(f=>[f.name,f]));
+  const data=files.get('annotations-reviewed.json')??files.get('annotations.json');if(!data)throw Error('Choose the folder containing annotations.json and frame PNGs.');
+  bundle=JSON.parse(await data.text());if(bundle.schema!=='pool-person-labels/1')throw Error('Unsupported annotation schema.');index=0;await show();$('error').textContent='';
+}catch(e){fail(e);}};
+$('previous').onclick=()=>{if(bundle&&index>0){index--;show().catch(fail);}};
+$('next').onclick=()=>{if(bundle&&index<bundle.frames.length-1){index++;show().catch(fail);}};
+$('zoom').onchange=resize;
+const point=e=>{const r=canvas.getBoundingClientRect();return [Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))];};
+canvas.onpointerdown=e=>{if(!image)return;drag=point(e);canvas.setPointerCapture(e.pointerId);};
+canvas.onpointermove=e=>{if(!drag)return;draw();const p=point(e);ctx.strokeStyle='#ffffff';ctx.strokeRect(drag[0]*canvas.width,drag[1]*canvas.height,(p[0]-drag[0])*canvas.width,(p[1]-drag[1])*canvas.height);};
+canvas.onpointerup=e=>{if(!drag)return;const p=point(e),b=[Math.min(drag[0],p[0]),Math.min(drag[1],p[1]),Math.max(drag[0],p[0]),Math.max(drag[1],p[1])];drag=null;
+  if((b[2]-b[0])*canvas.width<2||(b[3]-b[1])*canvas.height<2)return;
+  if($('ignore').checked){frame().ignore_regions.push(b);history.push('ignore');}
+  else{frame().people.push({bbox_xyxy_normalized:b,in_pool:true,tags:[]});selected=frame().people.length-1;history.push('person');}
+  frame().reviewed=false;controls();draw();
+};
+canvas.onpointercancel=()=>drag=null;
+$('undo').onclick=()=>{if(!bundle)return;const last=history.pop();if(last==='person')frame().people.pop();if(last==='ignore')frame().ignore_regions.pop();selected=-1;frame().reviewed=false;controls();draw();};
+$('person').onchange=e=>{selected=Number(e.target.value);controls();draw();};
+function edit(){const p=frame()?.people[selected];if(!p)return;p.in_pool=$('in-pool').checked;p.tags=[...document.querySelectorAll('.tag:checked')].map(t=>t.value);frame().reviewed=false;$('reviewed').checked=false;}
+$('in-pool').onchange=edit;document.querySelectorAll('.tag').forEach(t=>t.onchange=edit);
+$('delete').onclick=()=>{if(!bundle||selected<0)return;frame().people.splice(selected,1);selected=-1;history=[];frame().reviewed=false;controls();draw();};
+$('reviewed').onchange=e=>{if(bundle)frame().reviewed=e.target.checked;};
+$('save').onclick=()=>{if(!bundle)return;const url=URL.createObjectURL(new Blob([JSON.stringify(bundle,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='annotations-reviewed.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+</script></html>

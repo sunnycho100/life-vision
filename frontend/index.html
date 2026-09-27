@@ -1,179 +1,79 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="We Fall, We Die — explainable pool-risk monitoring demo"
-    />
-    <title>We Fall, We Die — Pool Monitor</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <canvas id="matrixCanvas" aria-hidden="true"></canvas>
-
-    <header class="topbar">
-      <a class="brand" href="#" aria-label="We Fall, We Die home">
-        <span class="brand-mark" aria-hidden="true">
-          <span></span><span></span><span></span>
-        </span>
-        <span>
-          <strong>WE FALL, WE DIE</strong>
-          <small>POOL INTELLIGENCE / DEMO BUILD</small>
-        </span>
-      </a>
-
-      <div class="system-state">
-        <span class="pulse-dot"></span>
-        <span id="systemStatus">SYSTEM READY</span>
-        <span class="demo-pill">SIMULATED INFERENCE</span>
-      </div>
-    </header>
-
-    <main>
-      <section class="hero-grid">
-        <div class="intro">
-          <p class="eyebrow">CAMERA 01 · BACKYARD POOL</p>
-          <h1>See the risk.<br /><em>Before it becomes silence.</em></h1>
-          <p class="lede">
-            One camera. Two temporal behaviors. A clear explanation for every alert.
-            Upload your team video and demonstrate the complete experience with scripted model results.
-          </p>
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1519">
+  <title>Poolside - person detection</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1519'/%3E%3Ctext x='4' y='26' font-size='32' fill='%239be6ce'%3E≈%3C/text%3E%3C/svg%3E">
+</head>
+<body class="menu-open">
+  <button id="menu-toggle" class="menu-toggle" aria-label="Toggle menu" aria-controls="setup-panel" aria-expanded="true">☰</button>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Poolside home"><span class="brand-mark">≈</span> poolside<span class="brand-dot">.</span></a>
+    <div class="workspace-label">RECORDED VIDEO <span>/</span> NEW SPACE</div>
+    <span class="privacy"><i></i> Server processing</span>
+  </header>
+  <main>
+    <div class="heading"><div><div class="eyebrow">PERSON DETECTION / RF-DETR NANO</div><h1>See the people in your pool.</h1><p>Upload a recording, analyze it, and review person detections in sync with the video.</p></div><span class="edition">PROTOTYPE <b>01</b></span></div>
+    <nav class="steps" aria-label="Setup progress">
+      <div class="step active" data-step="source"><span>01</span> Connect footage</div><div class="step" data-step="calibrate"><span>02</span> Define your space</div><div class="step" data-step="scan"><span>03</span> Analyze recording</div><div class="step" data-step="twin"><span>04</span> Review</div>
+    </nav>
+    <div class="workspace">
+      <aside id="setup-panel" class="setup-panel">
+        <section id="source-panel">
+          <h2>Source</h2><p>Fixed camera, clear view of the water.</p>
+          <button id="reference-button" class="source-card" disabled><strong>Wave pool recording</strong><small>2:09 · YouTube reference</small></button>
+          <a class="source-link" href="https://www.youtube.com/watch?v=PuAfTA2wf7o" target="_blank" rel="noreferrer">View original on YouTube</a>
+          <div class="or">or</div>
+          <label class="upload-zone" for="video-file"><strong>Upload a video</strong><small>MP4 or WebM</small></label><input id="video-file" type="file" accept="video/mp4,video/webm" hidden>
+          <p class="note">Counts may include missed or duplicate people.</p>
+        </section>
+        <section id="calibrate-panel" hidden>
+          <h2>Pool area</h2><p>Drag the four corners around the water, clockwise from the far left.</p>
+          <div class="calibration-note">The reference markers approximate the visible region, not the entire pool.</div>
+          <div class="field-grid"><label>Width <span>m</span><input id="pool-width" type="number" min="2" max="100" step="0.5" value="20"></label><label>Length <span>m</span><input id="pool-length" type="number" min="2" max="100" step="0.5" value="30"></label><label>Wall height <span>m</span><input id="pool-depth" type="number" min="0.3" max="10" step="0.1" value="1.5"></label><label>Water height <span>m</span><input id="water-height" type="number" min="0.1" max="10" step="0.1" value="1.1"></label></div>
+<button id="scan-button" class="primary">Analyze recording</button><button id="last-analysis" class="secondary" hidden>Review last analysis</button><details class="more-settings"><summary>Time settings</summary>
+          <p class="micro">Analyzes the whole video by default.</p>
+          <div class="field-grid"><label>Analyze from <span>seconds</span><input id="analysis-start" type="number" min="0" step="0.2" value="0"></label><label>Analyze until <span>seconds</span><input id="analysis-end" type="number" min="0.2" step="0.2"></label></div>
+          <label class="field-label">Mapping valid until <span>seconds</span><input id="mapping-end" type="number" min="1" step="1" value="95"></label>
+          <p class="micro">Mapping starts at this frame. Stop before the reference zoom at 1:35, or before any camera movement in your own clip.</p>
+          </details><button id="calibration-import" class="text-button">Import box results</button><button id="back-button" class="text-button">Change video</button>
+        </section>
+        <section id="scan-panel" hidden>
+          <h2>Analysis</h2><p>Running on the server. You can review results while it runs.</p>
+          <div class="scan-log"><div id="scan-geometry">○ Mapping reference plane</div><div id="scan-model">○ Loading vision model</div><div id="scan-detections">○ Detecting visible people</div></div>
+          <div class="scan-progress"><div id="scan-progress-bar"></div></div><p id="scan-status" class="micro" aria-live="polite">Preparing your space…</p>
+          <button id="review-progress" class="secondary">Review available results</button><button id="cancel-scan" class="text-button">Cancel analysis</button>
+        </section>
+        <section id="twin-panel" hidden>
+          <h2>Review</h2>
+          <div class="stat-grid"><div><strong id="person-count">0</strong><span>person boxes - entire frame</span></div><div><strong id="inference-time">—</strong><span>inference / ms</span></div></div>
+          <div class="view-switch" role="group" aria-label="View"><button data-view="video" class="selected">Footage</button><button data-view="split">Both</button><button data-view="twin">Digital twin</button></div>
+          <div class="twin-details"><div><span>Water region</span><b id="region-size">20 × 30 m</b></div><div><span>Geometry</span><b>Estimated</b></div><div><span>Inside outline - estimated</span><b id="pool-count">&mdash;</b></div><div><span>Model</span><b>RF-DETR Nano</b></div><div><span>Processing</span><b id="delegate">Starting</b></div></div>
+          <label class="field-label">Display confidence <span id="threshold-value">0.20</span><input id="confidence" type="range" min="0.2" max="0.95" step="0.01" value="0.2"></label><p id="job-status" class="micro" aria-live="polite"></p><button id="cancel-job" class="text-button" hidden>Cancel analysis</button><button id="recalibrate-button" class="secondary">Adjust pool mapping</button>
+          <button id="export-button" class="text-button">Export setup</button>
+          <button id="tracking-button" class="text-button">Import box results</button><input id="tracking-file" type="file" accept=".json,application/json" hidden>
+          <button id="resume-inference" class="text-button" hidden>Return to server results</button>
+          <p class="micro">No identity tracking or drowning classification in this version. Pool membership and 3D positions are approximate.</p>
+        </section>
+        <div id="message" role="status" aria-live="polite" hidden></div>
+      </aside>
+      <section class="viewer-area" aria-label="Video and digital twin">
+        <div class="viewer-top"><span><i class="status-dot"></i><b id="viewer-title">REFERENCE / WAVE POOL</b></span><span id="viewer-meta">RECORDED FOOTAGE</span></div>
+        <div id="stage" class="stage">
+          <div id="video-pane" class="video-pane"><video id="video" preload="auto" playsinline muted></video><canvas id="overlay" aria-label="Pool calibration and person boxes"></canvas><div id="handles"></div><div id="video-empty"><div class="empty-card"><p>No video</p><small>Pick a source from the menu</small></div></div></div>
+          <div id="three-pane" class="three-pane"><canvas id="three-canvas" aria-label="Interactive estimated 3D pool"></canvas><div class="scene-label">Estimated 3D view</div><div class="orbit-hint">Drag to orbit · Scroll to zoom</div><button id="reset-camera" aria-label="Reset 3D camera">⌖</button></div>
+          <div id="scan-effect" hidden><div class="scan-line"></div><div class="scan-chip"><i></i>Analyzing frames</div></div>
+          <div id="zoom-warning" hidden><strong>Camera framing has changed.</strong><span>The water mapping ends here. Recalibrate this segment to continue the 3D view.</span><button id="zoom-recalibrate">Recalibrate segment →</button></div>
+          <div id="hud" class="hud" hidden><strong id="hud-people">0</strong> people detected</div>
         </div>
-
-        <div class="summary-card">
-          <span class="summary-label">CURRENT SESSION</span>
-          <div class="summary-value"><strong id="peopleCount">0</strong> people tracked</div>
-          <div class="summary-value"><strong id="riskCount">0</strong> active risks</div>
-          <div class="summary-rule"></div>
-          <p>Analysis stays off until you activate monitoring.</p>
-        </div>
+        <div class="transport"><button id="play-button" aria-label="Play recording" disabled>▶</button><span id="time-current">0:00</span><input id="timeline" aria-label="Seek recording" type="range" min="0" max="129" step="0.01" value="0" disabled><span id="time-total">2:09</span><button id="speed-button" title="Playback speed">1x</button><button id="mute-button" aria-label="Toggle audio">⌁</button></div>
+        <div class="viewer-footer"><span id="tracking-status">Awaiting source connection</span><span>RECORDED ANALYSIS <i>↗</i></span></div>
       </section>
-
-      <section class="workspace">
-        <div class="monitor-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">LIVE ANALYSIS</p>
-              <h2>Pool feed</h2>
-            </div>
-            <div class="feed-meta">
-              <span><i></i> <span id="feedState">STANDBY</span></span>
-              <span id="clock">00:00:00</span>
-            </div>
-          </div>
-
-          <div class="video-shell" id="videoShell">
-            <video id="video" playsinline muted loop></video>
-            <div class="placeholder" id="placeholder">
-              <div class="water-lines"></div>
-              <div class="pool-grid"></div>
-              <div class="placeholder-copy">
-                <span class="camera-icon">◉</span>
-                <strong>ADD YOUR POOL FOOTAGE</strong>
-                <small>The scripted demo also runs on this simulated feed.</small>
-              </div>
-            </div>
-            <canvas id="overlayCanvas" aria-label="Person detection overlay"></canvas>
-            <div class="scan-line" id="scanLine"></div>
-            <div class="critical-banner" id="criticalBanner" role="alert">
-              <span>CRITICAL RISK DETECTED</span>
-              <strong>CHECK THE POOL NOW</strong>
-            </div>
-            <div class="source-tag" id="sourceTag">DEMO FEED · 1920 × 1080</div>
-          </div>
-
-          <div class="controls">
-            <label class="upload-button" for="videoUpload">
-              <span>＋</span> Choose video
-            </label>
-            <input id="videoUpload" type="file" accept="video/*" />
-
-            <button class="activate-button" id="activateButton" type="button">
-              <span class="button-icon">▶</span>
-              <span id="activateLabel">Activate monitoring</span>
-            </button>
-
-            <button class="ghost-button" id="resetButton" type="button">Reset demo</button>
-          </div>
-        </div>
-
-        <aside class="side-panel">
-          <div class="panel-heading compact">
-            <div>
-              <p class="eyebrow">DECISION ENGINE</p>
-              <h2>People & risk</h2>
-            </div>
-            <span class="live-badge" id="liveBadge">OFFLINE</span>
-          </div>
-
-          <div class="empty-state" id="emptyState">
-            <div class="radar"><span></span></div>
-            <strong>Waiting for activation</strong>
-            <p>Tracked people and explainable risk signals will appear here.</p>
-          </div>
-
-          <div class="person-list" id="personList" aria-live="polite"></div>
-
-          <div class="settings-block">
-            <div class="settings-heading">
-              <span>ALERT PREFERENCE</span>
-              <span class="demo-pill small">DEMO THRESHOLDS</span>
-            </div>
-            <div class="segmented-control" role="group" aria-label="Alert preference">
-              <button type="button" data-alert="yellow">Yellow + red</button>
-              <button type="button" data-alert="red" class="selected">Red only</button>
-              <button type="button" data-alert="screen">Screen only</button>
-            </div>
-          </div>
-        </aside>
-      </section>
-
-      <section class="lower-grid">
-        <article class="timeline-card">
-          <div class="panel-heading compact">
-            <div>
-              <p class="eyebrow">INCIDENT TIMELINE</p>
-              <h2>What the system saw</h2>
-            </div>
-            <button id="clearEvents" class="text-button" type="button">Clear</button>
-          </div>
-          <ol id="eventLog" class="event-log">
-            <li class="muted-event">
-              <time>—</time>
-              <span>No events yet. Activate monitoring to start the demonstration.</span>
-            </li>
-          </ol>
-        </article>
-
-        <article class="pipeline-card">
-          <p class="eyebrow">UNDER THE HOOD</p>
-          <h2>One pipeline, two behaviors</h2>
-          <div class="pipeline">
-            <span>VIDEO</span><b>→</b><span>DETECT</span><b>→</b><span>TRACK</span><b>→</b><span>TIME</span>
-          </div>
-          <div class="behavior-grid">
-            <div>
-              <span class="behavior-number">01</span>
-              <strong>Passive submersion</strong>
-              <p>Visible in pool, then missing without crossing the boundary.</p>
-            </div>
-            <div>
-              <span class="behavior-number">02</span>
-              <strong>Active distress</strong>
-              <p>Repeated upper-body motion with little forward progress.</p>
-            </div>
-          </div>
-        </article>
-      </section>
-    </main>
-
-    <footer>
-      <span>RESEARCH PROTOTYPE — NOT A CERTIFIED LIFESAVING DEVICE</span>
-      <span>Always maintain responsible adult supervision and physical pool barriers.</span>
-    </footer>
-
-    <script src="app.js"></script>
-  </body>
+    </div>
+    <footer><span><i></i> Video is processed and stored on the connected server.</span><span>Person detection prototype - no drowning assessment</span></footer>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
 </html>

@@ -1,6 +1,6 @@
 # Presentation assets
 
-Everything that goes into the slides: videos, images, charts, and the numbers behind them. Start with the [final deck](slides/final/life-vision-hackathon-deck-clean.pptx) and [final presenter script](presenter-script-final.md). The earlier narrative remains in [docs/presentation.md](../docs/presentation.md) as supporting material.
+Everything that goes into the slides: videos, images, charts, and the numbers behind them. Start with the [final team deck](slides/final/life-vision-team-refined.pptx) and [final team script](presenter-script-team-refined.md). The earlier narrative remains in [docs/presentation.md](../docs/presentation.md) as supporting material.
 
 | Folder | What goes here |
 |---|---|
@@ -35,15 +35,17 @@ Name files by what they show, e.g. `before_stock_rfdetr_default_tracker.mp4`, no
 | `data/sim_results.csv` | Detector and tracker results on the held-out sim scenario | [docs/global/simulation.md](../docs/global/simulation.md) |
 | `slides/final/life-vision-hackathon-deck-clean.pptx` | Final 10-slide hackathon deck using a clean, high-legibility healthcare palette; includes editable chart data and speaker notes | generated with `slides/build_final_deck.mjs` from repository results and sources |
 | `presenter-script-final.md` | Timed 5:30 talk track, live-demo checklist, transitions, and likely judge Q&A | written from the final deck and measured repository results |
+| `slides/final/life-vision-team-refined.pptx` | Current 10-slide team presentation: verified health context, scope decisions, team timeline, technical evidence, live demo, and next test | generated with `slides/build_team_refined_deck.mjs` from teammate material and repository results |
+| `presenter-script-team-refined.md` | Current 5:30 team script with presenter handoffs, evidence caveats, live-demo language, and judge Q&A | written from the refined team deck |
 | `images/generated/cover-pool-camera.png` | Cinematic pool-camera cover visual | generated with OpenAI ImageGen for this presentation |
 | `images/generated/safe-pool-demo.png` | Safe two-person pool scene used to explain the live demo | generated with OpenAI ImageGen for this presentation |
 | `images/generated/camera-pool-integration.png` | Unbranded pool-camera integration concept | generated with OpenAI ImageGen for this presentation |
 
 ## Presenting the final deck
 
-1. Rehearse from `presenter-script-final.md`; the target runtime is 5 minutes 30 seconds.
+1. Rehearse from `presenter-script-team-refined.md`; the target runtime is 5 minutes 30 seconds.
 2. Before presenting, open the local frontend and load the team's prerecorded pool clip.
-3. On slide 9, switch to the frontend, activate monitoring, and narrate green → yellow → red as the timer advances.
+3. On slide 8, switch to the frontend, activate monitoring, and narrate the green, yellow, and red states as the timer advances.
 4. State whether the run is live inference, prerecorded inference, or scripted output. Do not imply a scripted run is a live model result.
 5. If the live demo fails, return to the deck and use the recorded simulation assets in `videos/`.
 

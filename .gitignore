@@ -23,6 +23,11 @@ node_modules/
 dist/
 
 .DS_Store
+
+# Downloaded browser runtimes/model and local prototype artifacts
+frontend/vendor/
+artifacts/
+*.webm
 .codex-build/
 
 # Isaac Sim renders
@@ -46,3 +51,4 @@ data/sim_scenarios/rfdetr_ds/
 # Presentation assets (small, committed on purpose)
 !presentation/**/*.mp4
 data/sim_demo/
+sim/isaac/_out*.log

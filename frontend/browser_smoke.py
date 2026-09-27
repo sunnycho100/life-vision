@@ -1,0 +1,124 @@
+﻿"""Real Chrome acceptance tests. Uses real server inference; fixtures only for >100/empty/gap checks."""
+import argparse
+import asyncio
+import json
+from pathlib import Path
+from playwright.async_api import async_playwright
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / "artifacts"
+
+
+async def main(base):
+    OUT.mkdir(exist_ok=True)
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(channel="chrome", headless=True, args=["--enable-unsafe-swiftshader"])
+        page = await browser.new_page(viewport={"width": 1440, "height": 1080})
+        errors, requests, jobs = [], [], []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("request", lambda r: requests.append(r.url))
+        page.on("request", lambda r: jobs.append(r.url) if r.method == "POST" and r.url.endswith("/api/jobs") else None)
+        await page.goto(base)
+        await page.wait_for_function("!document.querySelector('#reference-button').disabled")
+        unit = await page.evaluate("""async () => {
+          const c = await import('./core.mjs');
+          const assert = (v, m) => {if (!v) throw Error(m);};
+          const q = [[.1,.1],[.9,.2],[.8,.9],[.2,.8]];
+          const dst = [[0,0],[20,0],[20,30],[0,30]], h=c.homography(q,dst);
+          assert(c.validQuad(q), 'valid outline');
+          q.forEach((p,i)=>assert(Math.hypot(...c.project(h,...p).map((v,j)=>v-dst[i][j]))<1e-6,'homography'));
+          assert(!c.validQuad([q[0],q[2],q[1],q[3]]),'crossed outline');
+          const frames=[{media_time:1,status:'analyzed',detections:[]},{media_time:2,status:'decode_error',detections:[]}];
+          assert(c.observationAt(frames,1.2)?.detections.length===0,'analyzed empty');
+          assert(c.observationAt(frames,.999)===null && c.observationAt(frames,1.31)===null && c.observationAt(frames,2)===null,'future, stale, failed hidden');
+          const cache = new c.ObservationCache(async start=>[{media_time:start,status:'analyzed',detections:[]}]);
+          for(let t=0;t<100;t+=10) await cache.ensure(t,true);
+          assert(cache.windows.size===3,'cache bound');
+          let finish; const stale=new c.ObservationCache(()=>new Promise(r=>finish=r));
+          const pending=stale.ensure(0); stale.clear(); finish([]); await pending;
+          assert(stale.windows.size===0,'old source response discarded');
+          return 'geometry, observation timing, bounded cache and source isolation passed';
+        }""")
+        print(unit, flush=True)
+        await page.click("#reference-button")
+        await page.wait_for_function("!document.querySelector('#calibrate-panel').hidden")
+        await page.fill("#water-height", "9")
+        await page.click("#scan-button")
+        assert "water height" in await page.locator("#message").text_content()
+        await page.fill("#water-height", "1.1")
+        await page.fill("#analysis-start", "8")
+        await page.fill("#analysis-end", "10")
+        await page.click("#scan-button")
+        await page.wait_for_function("!document.querySelector('#twin-panel').hidden", timeout=90000)
+        await page.evaluate("video.currentTime=8.1")
+        await page.wait_for_function("Number(document.querySelector('#person-count').textContent)>0", timeout=15000)
+        assert await page.locator("#stage").get_attribute("data-view") == "video"
+        assert await page.evaluate("video.playbackRate") == 1
+        metrics = await page.evaluate("""({
+          detections:Number(document.querySelector('#person-count').textContent),
+          inference_ms:Number(document.querySelector('#inference-time').textContent),
+          runtime:document.querySelector('#delegate').textContent,
+          video_time:video.currentTime,
+          boxes:Number(document.querySelector('#overlay').dataset.boxCount)
+        })""")
+        assert metrics["boxes"] == metrics["detections"]
+        await page.screenshot(path=str(OUT / "rfdetr-person-detection.png"), full_page=True)
+        before = len(jobs)
+        for time in [9.5, 8.5, 9.1]:
+            await page.evaluate("(t)=>video.currentTime=t", time)
+            await page.wait_for_function("!video.seeking && Number(document.querySelector('#person-count').textContent)>0")
+        assert len(jobs) == before, "Seeking started another job"
+        await page.set_viewport_size({"width": 1100, "height": 900})
+        await page.wait_for_timeout(100)
+        assert await page.evaluate("Number(overlay.dataset.boxCount)>0")
+        # Old JSON accepts boxes even with unusable former identity/landmark data.
+        source = await page.evaluate("async()=>await (await fetch('/api/reference')).json()")
+        people = [{"track_id": "ignored", "keypoints": "ignored", "bbox_xyxy": [.35,.35,.4,.5], "confidence": .9} for _ in range(150)]
+        fixture = {"schema_version": 1, "video": {"sha256": source["sha256"], "width": source["width"], "height": source["height"], "duration_sec": source["duration"]},
+                   "frames": [{"t_sec": 22, "people": people}, {"t_sec": 23, "people": []}, {"t_sec": 96, "people": people}]}
+        await page.locator("#tracking-file").set_input_files({"name": "box-fixture.json", "mimeType": "application/json", "buffer": json.dumps(fixture).encode()})
+        await page.evaluate("video.currentTime=22")
+        await page.wait_for_function("document.querySelector('#person-count').textContent==='150' && overlay.dataset.boxCount==='150'")
+        await page.evaluate("video.currentTime=23")
+        await page.wait_for_function("document.querySelector('#person-count').textContent==='0'")
+        await page.evaluate("video.currentTime=23.5")
+        await page.wait_for_function("document.querySelector('#person-count').textContent==='\u2014'")
+        await page.evaluate("video.currentTime=96")
+        await page.wait_for_function("document.querySelector('#person-count').textContent==='150'")
+        assert await page.locator("#pool-count").text_content() == "\u2014", "Pool count must expire while detections continue"
+        await page.click('button[data-view="split"]')
+        await page.wait_for_function("document.querySelector('#stage').dataset.view==='split'")
+        assert await page.locator("#zoom-warning").is_visible()
+        await page.click('button[data-view="video"]')
+        assert await page.locator("#zoom-warning").is_hidden()
+        # Compare actual browser presentation timestamps against decoder PTS.
+        timing = []
+        for target in [8.008,22.0053166667,45.0116333333,70.0032666667,90.0065833333]:
+            actual = await page.evaluate("""t=>new Promise((resolve,reject)=>{
+              const timeout=setTimeout(()=>reject(Error('No presented frame')),5000);
+              video.requestVideoFrameCallback((_,m)=>{clearTimeout(timeout);resolve(m.mediaTime);});
+              video.currentTime=t+0.001;
+            })""", target)
+            assert abs(actual-target) <= .5/59.94 + 1e-5, (target, actual)
+            timing.append({"decoder_time": target, "browser_time": actual})
+        mobile = await browser.new_page(viewport={"width": 390, "height": 844})
+        await mobile.goto(base)
+        await mobile.wait_for_function("!document.querySelector('#reference-button').disabled")
+        assert await mobile.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        await mobile.screenshot(path=str(OUT / "rfdetr-mobile.png"), full_page=True)
+        forbidden = [url for url in requests if any(s in url.lower() for s in ["pose-worker", "yolov8n-pose", "mediapipe", "landmarker", "vision_bundle"])]
+        assert not forbidden, forbidden
+        assert not errors, errors
+        report = {"status": "passed", "real_rf_detr": metrics, "timing_checks": timing,
+                  "synthetic_checks": ["150 boxes", "empty vs unavailable", "legacy import", "pool boundary"],
+                  "page_errors": errors, "pose_network_requests": forbidden}
+        (OUT / "rfdetr-browser-results.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(json.dumps(report, indent=2), flush=True)
+        await browser.close()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--url", default="http://127.0.0.1:5173")
+    asyncio.run(main(parser.parse_args().url))
+

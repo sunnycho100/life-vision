@@ -58,6 +58,15 @@ function showPosition(position) {
     : 'Pause and select a 3D marker to inspect its estimated position across the water.';
 }
 function clearDisplay() {currentDetections = []; currentTracks = []; detectionTracks = null; renderTrackStates(null); twin?.updatePeople([]); showPosition(null); $('person-count').textContent = '—'; $('pool-count').textContent = '—'; $('hud').hidden = true;}
+// A lost box counts as "possibly under water" only if the person was last seen inside the mapped pool
+// and was big enough to detect reliably. Far-away swimmers (box under 5% of frame height) flicker in and out
+// of detection on their own, which raised 5 false alerts in the first 30 s of the wave pool clip.
+// ponytail: fixed size floor tuned on one camera; lower it when the detector sees small people reliably.
+const MIN_UNDER_HEIGHT = .05;
+function possiblyUnder(track) {
+  const b = track.bbox_xyxy_normalized;
+  return !track.visible && mappingValid() && b[3] - b[1] >= MIN_UNDER_HEIGHT && inside(boxAnchor(b), config.corners);
+}
 const TRACK_COLORS = {safe: '#3ddc84', missing: '#9aa3ab', warning: '#ffb000', alarm: '#ff4d4d'};
 function draw() {
   const width = $('video-pane').clientWidth, height = $('video-pane').clientHeight, dpr = Math.min(devicePixelRatio, 2);
@@ -75,12 +84,14 @@ function draw() {
   if (detectionTracks) { // tracked people: stable IDs, lost people held at their last box
     for (const track of detectionTracks) {
       const b = track.bbox_xyxy_normalized, a = point(b.slice(0, 2)), z = point(b.slice(2));
-      const color = TRACK_COLORS[track.visible ? 'safe' : track.level] ?? TRACK_COLORS.missing;
+      const under = possiblyUnder(track);
+      const color = TRACK_COLORS[track.visible ? 'safe' : under ? track.level : 'missing'] ?? TRACK_COLORS.missing;
       context.strokeStyle = color; context.fillStyle = color; context.lineWidth = track.visible ? 2 : 1.6;
       context.setLineDash(track.visible ? [] : [5, 4]);
       context.strokeRect(a[0], a[1], z[0] - a[0], z[1] - a[1]);
       context.setLineDash([]);
-      const text = 'Person ' + track.person_id + (track.visible ? '' : ' · not seen ' + track.missing_s.toFixed(1) + 's');
+      if (!track.visible && (!under || track.level === 'safe')) continue; // dashed outline only; label once missing 1 s+ in the pool
+      const text = (track.visible ? '' : 'Person ') + track.person_id + (track.visible ? '' : ' · possibly under water ' + track.missing_s.toFixed(1) + 's');
       context.font = '600 11px system-ui, sans-serif';
       const w = context.measureText(text).width, y = Math.max(r.y + 14, a[1] - 4);
       context.fillStyle = '#000000b0'; context.fillRect(a[0] - 2, y - 11, w + 4, 14);
@@ -274,6 +285,10 @@ function updateDisplay() {
   $('pool-count').textContent = observation && mappingValid() ? currentDetections.filter(d => inside(boxAnchor(d.bbox_xyxy_normalized), config.corners)).length : '—';
   $('hud').hidden = !observation;
   $('hud-people').textContent = currentDetections.length;
+  const alerts = (detectionTracks ?? []).filter(tr => possiblyUnder(tr) && ['warning', 'alarm'].includes(tr.level));
+  $('hud-alert').hidden = !alerts.length;
+  $('hud-alert').className = alerts.some(tr => tr.level === 'alarm') ? 'alarm' : 'warning';
+  $('hud-alert').textContent = alerts.map(tr => 'Person ' + tr.person_id + ' possibly under water ' + Math.floor(tr.missing_s) + 's').join(' · ');
   if (phase === 'twin' || phase === 'scan') $('tracking-status').textContent = observation
     ? currentDetections.length + ' person boxes · ' + (importedFrames ? 'imported observations' : tracked ? 'persistent track replay' : 'RF-DETR Nano') + (mappingValid() ? '' : ' · pool outline needs calibration')
     : 'Analysis unavailable at this time';
@@ -297,6 +312,7 @@ document.querySelectorAll('button[data-view]').forEach(button => button.onclick 
 function recalibrate() {video.pause(); setPhase('calibrate'); $('mapping-end').value = video.currentTime >= source.mapping_end ? source.duration : source.mapping_end; $('scan-button').textContent = 'Save pool mapping';}
 $('recalibrate-button').onclick = recalibrate; $('zoom-recalibrate').onclick = recalibrate;
 $('reset-camera').onclick = () => twin?.resetCamera();
+document.querySelectorAll('[data-preset]').forEach(button => button.onclick = () => twin?.preset(button.dataset.preset));
 $('play-button').onclick = () => video.paused ? video.play().catch(e => message(e.message)) : video.pause();
 $('timeline').oninput = e => {video.currentTime = Number(e.target.value);};
 $('speed-button').onclick = () => {const rates = [1, .5, .25, 2]; video.playbackRate = rates[(rates.indexOf(video.playbackRate) + 1) % rates.length]; $('speed-button').textContent = video.playbackRate + '×';};

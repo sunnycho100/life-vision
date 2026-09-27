@@ -51,7 +51,7 @@ def main():
     model = YOLO("yolo11n.pt")  # COCO-pretrained; its "person" features transfer well
     model.train(data=str(yaml), epochs=args.epochs, imgsz=args.imgsz, batch=8, patience=25,
                 project=str(ROOT / "model/runs"), name="pool_yolo11n", exist_ok=True,
-                fliplr=0.5, degrees=5, mosaic=1.0, close_mosaic=10, workers=2, plots=True)
+                fliplr=0.5, degrees=5, mosaic=1.0, close_mosaic=10, workers=0, plots=True)  # workers=0: Windows loader workers crashed mid-run
     if test.exists():
         metrics = model.val(data=str(yaml), split="test", imgsz=args.imgsz, project=str(ROOT / "model/runs"),
                             name="pool_yolo11n_test", exist_ok=True)

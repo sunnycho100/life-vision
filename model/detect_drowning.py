@@ -1,7 +1,7 @@
 """Run the fine-tuned YOLO11n + ByteTrack on a pool video and raise drowning warnings/alarms.
 
 Per tracked person:
-  - class each frame: swimming or underwater (smoothed over ~0.5 s)
+  - class each frame: swimming or underwater, with hysteresis (see Person.update)
   - underwater timer: runs while the class is underwater, and keeps running if the tracker
     loses someone who was underwater (the tracker drops lost IDs after a few seconds; the
     timer lives outside it, see docs/rsusarla3/detection-logic-research.md)
@@ -51,25 +51,36 @@ tracker_cfg.write_text(  # keep lost tracks ~3 s so short dives keep their ID
     f"tracker_type: bytetrack\ntrack_high_thresh: 0.3\ntrack_low_thresh: 0.1\nnew_track_thresh: 0.4\n"
     f"track_buffer: {int(3 * fps)}\nmatch_thresh: 0.8\nfuse_score: True\n")
 model = YOLO(args.weights)
-UNDER = [k for k, v in model.names.items() if v == "underwater"][0]
+UNDER = next((k for k, v in model.names.items() if v == "underwater"), None)
+# Person-only models (stock YOLO, the MuJoCo-trained sim_yolo11n.pt) can't see "underwater".
+# For them we fall back to the v1 rule: someone the detector loses is assumed to be underwater.
+PERSON_ONLY = UNDER is None
+CLASSES = [k for k, v in model.names.items() if v == "person"] if PERSON_ONLY and len(model.names) > 1 else None
 
 
 class Person:
     def __init__(self, pid, t, box):
         self.pid, self.box, self.last_seen = pid, box, t
-        self.cls_hist = deque(maxlen=max(3, int(0.5 * fps)))
+        self.hist = deque(maxlen=int(2 * fps))  # (t, class)
         self.centers = deque(maxlen=int(2 * fps) + 1)
         self.under_since = None
         self.status = "ok"
 
     def update(self, t, box, cls):
         self.box, self.last_seen = box, t
-        self.cls_hist.append(cls)
+        self.hist.append((t, cls))
         self.centers.append(((box[0] + box[2]) / 2, (box[1] + box[3]) / 2, box[3] - box[1]))
-        under = sum(c == UNDER for c in self.cls_hist) >= 0.6 * len(self.cls_hist)
-        if under and self.under_since is None:
-            self.under_since = t
-        elif not under:
+        if PERSON_ONLY:
+            self.under_since = None  # seen again = back up (v1 rule)
+            return
+        # Hysteresis: start the timer once half of the last second is "underwater" (backdated to
+        # the first underwater frame), and only clear it after a second of mostly "swimming".
+        # Without this, single-frame class flickers keep resetting the timer.
+        recent = [(tt, c) for tt, c in self.hist if t - tt <= 1.0]
+        frac = sum(c == UNDER for _, c in recent) / len(recent)
+        if self.under_since is None and frac >= 0.5:
+            self.under_since = next(tt for tt, c in recent if c == UNDER)
+        elif self.under_since is not None and frac <= 0.2 and len(recent) >= 0.8 * fps:
             self.under_since = None
 
     def still(self):
@@ -117,7 +128,7 @@ while True:
         break
     t = f / fps
     res = model.track(frame, persist=True, tracker=str(tracker_cfg), conf=args.conf, imgsz=args.imgsz,
-                      verbose=False)[0]
+                      classes=CLASSES, verbose=False)[0]
     seen, dets = set(), []
     if res.boxes is not None and res.boxes.id is not None:
         for box, tid, cls, conf in zip(res.boxes.xyxy.cpu().numpy(), res.boxes.id.int().cpu().tolist(),
@@ -127,6 +138,8 @@ while True:
             seen.add(p.pid)
             dets.append((p, cls, conf))
     for p in people.values():  # lost people keep their underwater timer running
+        if PERSON_ONLY and p.pid not in seen and p.under_since is None and t - p.last_seen >= 0.3:
+            p.under_since = p.last_seen  # v1 rule: disappeared = went under
         p.evaluate(t)
 
     for p, cls, conf in dets:
@@ -184,25 +197,32 @@ if args.gt:
             best = max(d["dets"], key=lambda x: iou(box, x["box"]), default=None)
             if best is not None and iou(box, best["box"]) >= 0.4:
                 stats[name][0] += 1
-                stats[name][1] += model.names[best["cls"]] == name
+                stats[name][1] += (model.names[best["cls"]] == name) if not PERSON_ONLY else 0
                 match_votes.setdefault(gid, {}).setdefault(best["pid"], 0)
                 match_votes[gid][best["pid"]] += 1
             tr = truth.setdefault(gid, {"scenario": info["scenario"]})
             for level, thr in (("WARNING", args.warn), ("ALARM", args.alarm)):
                 if info["seconds_below"] >= thr and level not in tr:
                     tr[level] = g["t"]
+    # Each track ID counts only for the person it matched most often, so a swimmer passing
+    # over someone on the floor can't pick up (or hand over) their alarm.
+    owner_of = {}
     for gid, votes in match_votes.items():
-        pids = sorted(votes, key=votes.get, reverse=True)
+        for pid, n in votes.items():
+            if n > owner_of.get(pid, (None, 0))[1]:
+                owner_of[pid] = (gid, n)
+    for gid in match_votes:
+        pids = [pid for pid, (g, _) in owner_of.items() if g == gid]
         for d in log:
             for level in ("WARNING", "ALARM"):
                 hit = any(d["status"].get(pid) in ((level, "ALARM") if level == "WARNING" else ("ALARM",))
-                          for pid in pids if votes[pid] >= 3)
+                          for pid in pids)
                 if hit and level not in first.setdefault(gid, {}):
                     first[gid][level] = d["t"]
     print("\nDETECTION (IoU >= 0.4 against the full-body truth box)")
     for name, (found, right, total) in stats.items():
         print(f"  {name:10s}  found {found}/{total} ({found / max(total, 1):.0%})   "
-              f"class correct when found {right / max(found, 1):.0%}")
+              + (f"class correct when found {right / max(found, 1):.0%}" if not PERSON_ONLY else "(person-only model)"))
     print(f"\nALARMS (warn at {args.warn}s under, alarm at {args.alarm}s, or {args.still}s if still)")
     print(f"  {'person':22s} {'true warn':>10s} {'model warn':>11s} {'true alarm':>11s} {'model alarm':>12s}")
     fmt = lambda v: "-" if v is None else f"{v:.1f}s"  # noqa: E731

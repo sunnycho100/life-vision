@@ -5,7 +5,7 @@ const video = $('video'), stage = $('stage'), overlay = $('overlay'), context = 
 const panels = ['source', 'calibrate', 'scan', 'twin'];
 let phase = 'source', corners = [[.085, .08], [.95, .14], [.96, .91], [.22, .91]];
 let source = null, reference, config = null, job = null, lastJob = null, twin = null, importedFrames = null;
-let sourceGeneration = 0, frameTime = 0, currentDetections = [], threshold = .2, refreshPending = false, pollBusy = false;
+let sourceGeneration = 0, frameTime = 0, currentDetections = [], currentTracks = null, threshold = .2, refreshPending = false, pollBusy = false;
 const handles = [];
 const cache = new ObservationCache(async (start, end) => {
   const response = await api('/api/jobs/' + job.id + '/observations?start=' + start + '&end=' + end);
@@ -18,7 +18,9 @@ async function api(url, options) {
   if (!response.ok) throw Error(typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail));
   return body;
 }
-function message(text) {$('message').textContent = text; $('message').hidden = !text;}
+function message(text) {$('message').textContent = text; $('message').hidden = !text; if (text) setMenu(true);}
+function setMenu(open) {document.body.classList.toggle('menu-open', open); $('menu-toggle').setAttribute('aria-expanded', open);}
+$('menu-toggle').onclick = () => setMenu(!document.body.classList.contains('menu-open'));
 function setPhase(next) {
   phase = next;
   panels.forEach((name, i) => {
@@ -42,7 +44,8 @@ function videoRect() {
   return {x: (w - width) / 2, y: (h - height) / 2, width, height};
 }
 function mappingValid() {return config && video.currentTime >= config.start - 1e-6 && video.currentTime < config.end;}
-function clearDisplay() {currentDetections = []; twin?.updatePeople([]); $('person-count').textContent = '—'; $('pool-count').textContent = '—';}
+function clearDisplay() {currentDetections = []; currentTracks = null; twin?.updatePeople([]); $('person-count').textContent = '—'; $('pool-count').textContent = '—'; $('hud').hidden = true;}
+const TRACK_COLORS = {safe: '#3ddc84', missing: '#9aa3ab', warning: '#ffb000', alarm: '#ff4d4d'};
 function draw() {
   const width = $('video-pane').clientWidth, height = $('video-pane').clientHeight, dpr = Math.min(devicePixelRatio, 2);
   if (overlay.width !== Math.round(width * dpr) || overlay.height !== Math.round(height * dpr)) {
@@ -51,11 +54,28 @@ function draw() {
   context.setTransform(dpr, 0, 0, dpr, 0, 0); context.clearRect(0, 0, width, height);
   if (!source) return;
   const r = videoRect(), point = p => [r.x + p[0] * r.width, r.y + p[1] * r.height];
-  if (phase === 'calibrate' || mappingValid()) {
+  if (phase === 'calibrate') { // outline only while placing corners; review shows just the person boxes
     context.beginPath(); corners.forEach((p, i) => {const xy = point(p); i ? context.lineTo(...xy) : context.moveTo(...xy);}); context.closePath();
     context.strokeStyle = '#abf2d8'; context.fillStyle = '#81f3cf09'; context.lineWidth = 1.3; context.stroke(); context.fill();
   }
   handles.forEach((handle, i) => {const p = point(corners[i]); handle.style.left = p[0] + 'px'; handle.style.top = p[1] + 'px';});
+  if (currentTracks) { // tracked people: stable IDs, lost people held at their last box
+    for (const track of currentTracks) {
+      const b = track.bbox_xyxy_normalized, a = point(b.slice(0, 2)), z = point(b.slice(2));
+      const color = TRACK_COLORS[track.visible ? 'safe' : track.level] ?? TRACK_COLORS.missing;
+      context.strokeStyle = color; context.fillStyle = color; context.lineWidth = track.visible ? 2 : 1.6;
+      context.setLineDash(track.visible ? [] : [5, 4]);
+      context.strokeRect(a[0], a[1], z[0] - a[0], z[1] - a[1]);
+      context.setLineDash([]);
+      const text = 'Person ' + track.person_id + (track.visible ? '' : ' · not seen ' + track.missing_s.toFixed(1) + 's');
+      context.font = '600 11px system-ui, sans-serif';
+      const w = context.measureText(text).width, y = Math.max(r.y + 14, a[1] - 4);
+      context.fillStyle = '#000000b0'; context.fillRect(a[0] - 2, y - 11, w + 4, 14);
+      context.fillStyle = color; context.fillText(text, a[0], y);
+    }
+    overlay.dataset.boxCount = currentTracks.filter(tr => tr.visible).length;
+    return;
+  }
   for (const detection of currentDetections) {
     const b = detection.bbox_xyxy_normalized, a = point(b.slice(0, 2)), z = point(b.slice(2));
     context.strokeStyle = '#9be6ce'; context.fillStyle = '#c5ffeb'; context.lineWidth = 1.4;
@@ -216,9 +236,13 @@ function updateDisplay() {
   const frames = importedFrames ?? cache.frames(time);
   const observation = observationAt(frames, time);
   currentDetections = observation ? observation.detections.filter(d => d.confidence === null || d.confidence >= threshold) : [];
+  currentTracks = observation?.tracks ?? null;
+  if (currentTracks) currentDetections = currentTracks.filter(tr => tr.visible);
   $('person-count').textContent = observation ? currentDetections.length : '—';
   $('inference-time').textContent = observation?.inference_ms ? Math.round(observation.inference_ms) : '—';
   $('pool-count').textContent = observation && mappingValid() ? currentDetections.filter(d => inside(boxAnchor(d.bbox_xyxy_normalized), config.corners)).length : '—';
+  $('hud').hidden = !observation;
+  $('hud-people').textContent = currentDetections.length;
   if (phase === 'twin' || phase === 'scan') $('tracking-status').textContent = observation
     ? currentDetections.length + ' person boxes · ' + (importedFrames ? 'imported observations' : 'RF-DETR Nano') + (mappingValid() ? '' : ' · pool outline needs calibration')
     : 'Analysis unavailable at this time';
@@ -236,7 +260,6 @@ async function setView(view) {
   stage.dataset.view = view;
   $('zoom-warning').hidden = view === 'video' || !config || mappingValid();
   document.querySelectorAll('button[data-view]').forEach(button => button.classList.toggle('selected', button.dataset.view === view));
-  $('view-badge').textContent = view === 'video' ? 'PERSON DETECTIONS' : 'APPROXIMATE POSITIONS';
 }
 document.querySelectorAll('button[data-view]').forEach(button => button.onclick = () => setView(button.dataset.view));
 function recalibrate() {video.pause(); setPhase('calibrate'); $('mapping-end').value = video.currentTime >= source.mapping_end ? source.duration : source.mapping_end; $('scan-button').textContent = 'Save pool mapping';}

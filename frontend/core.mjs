@@ -34,11 +34,20 @@ export function observationAt(frames, time) {
 }
 
 export class ObservationCache {
-  constructor(loader, maxWindows = 3) {this.loader = loader; this.maxWindows = maxWindows; this.windows = new Map(); this.pending = new Map(); this.generation = 0;}
+  constructor(loader, maxWindows = 4) {this.loader = loader; this.maxWindows = maxWindows; this.windows = new Map(); this.pending = new Map(); this.generation = 0;}
   clear() {this.generation++; this.windows.clear(); this.pending.clear();}
-  frames(time) {return this.windows.get(Math.floor(time / 10))?.frames ?? [];}
+  // Frames from the current 10 s window plus its loaded neighbors, so a box never drops at a window edge.
+  frames(time) {
+    const key = Math.floor(time / 10);
+    return [key - 1, key, key + 1].flatMap(k => this.windows.get(k)?.frames ?? []).sort((a, b) => a.media_time - b.media_time);
+  }
   async ensure(time, completed = false) {
-    const key = Math.floor(time / 10), found = this.windows.get(key);
+    const key = Math.floor(time / 10);
+    if (time - key * 10 > 5) this.load(key + 1, completed); // prefetch the next window before playback reaches it
+    return this.load(key, completed);
+  }
+  async load(key, completed = false) {
+    const found = this.windows.get(key);
     if (found && (completed || performance.now() - found.loaded < 1000)) {
       this.windows.delete(key); this.windows.set(key, found); return;
     }

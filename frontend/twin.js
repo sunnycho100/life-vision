@@ -86,11 +86,11 @@ export class PoolTwin {
     const rim = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(-w / 2, h, -l / 2), new THREE.Vector3(w / 2, h, -l / 2), new THREE.Vector3(w / 2, h, l / 2), new THREE.Vector3(-w / 2, h, l / 2),
     ]), new THREE.LineBasicMaterial({color: 0x9debd7})); this.pool.add(rim);
-    this.pool.add(this.cameraMarker(this.pose, w, l, d, h));
+    this.pool.add(this.cameraMarker(this.pose, w, l, h));
   }
 
-  // Estimated recording camera: body, a pole down to the deck, and view lines to the mapped water corners.
-  cameraMarker(pose, w, l, d, h) {
+  // Estimated recording camera: body, height label, and view lines to the mapped water corners.
+  cameraMarker(pose, w, l, h) {
     const group = new THREE.Group(), color = 0xf2d39b, eye = new THREE.Vector3(pose.x, h + pose.height, pose.z);
     const body = new THREE.Group(); body.position.copy(eye);
     const s = this.size / 30, solid = new THREE.MeshStandardMaterial({color, roughness: .5});
@@ -101,12 +101,11 @@ export class PoolTwin {
     group.add(body);
     const line = (points, opacity) => new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({color, transparent: true, opacity}));
     [[-w / 2, -l / 2], [w / 2, -l / 2], [w / 2, l / 2], [-w / 2, l / 2]].forEach(([x, z]) => group.add(line([eye, new THREE.Vector3(x, h, z)], .35)));
-    group.add(line([eye, new THREE.Vector3(pose.x, Math.min(d, eye.y), pose.z)], .6));
-    const label = document.createElement('canvas'); label.width = 256; label.height = 64;
+    const label = document.createElement('canvas'); label.width = 384; label.height = 64;
     const ctx = label.getContext('2d'); ctx.font = '600 26px Inter, Arial, sans-serif'; ctx.fillStyle = '#f2d39b'; ctx.textAlign = 'center';
-    ctx.fillText('CAMERA (EST.)', 128, 40);
+    ctx.fillText('Camera · ~' + Math.round(pose.height) + ' m up (est.)', 192, 40);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(label), transparent: true, depthTest: false}));
-    sprite.scale.set(6 * s, 1.5 * s, 1); sprite.position.set(eye.x, eye.y + 1.6 * s, eye.z); group.add(sprite);
+    sprite.scale.set(9 * s, 1.5 * s, 1); sprite.position.set(eye.x, eye.y + 1.6 * s, eye.z); group.add(sprite);
     return group;
   }
 

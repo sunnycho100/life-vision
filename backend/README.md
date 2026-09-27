@@ -1,6 +1,6 @@
 # backend
 
-Owner: Person 4 (Backend)
+- `pipeline/` (Sunny, sunnycho100): video source, detector wrapper, tracker. Writes `tracks.json` (contract A).
+- `events/` (Rohan, rsusarla3): event engine. Reads `tracks.json` and `<video>.pool.json`, writes `results.json` (contract B).
 
-Camera stream ingest, rolling buffer, model inference, clip saving, incident database, alert API.
-Start with a dummy model so the frontend is not blocked.
+Contracts: [docs/global/architecture.md](../docs/global/architecture.md#data-contracts).

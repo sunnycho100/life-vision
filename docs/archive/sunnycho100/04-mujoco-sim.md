@@ -2,7 +2,7 @@
 
 updated: 2026-09-26 · author: sunnycho100 (agent research)
 
-Script: [`sim/mujoco/drown_sim.py`](../../sim/mujoco/drown_sim.py) · Output: [`data/sim_samples/`](../../data/sim_samples/)
+Script: [`sim/mujoco/drown_sim.py`](../../../sim/mujoco/drown_sim.py) · Output: [`data/sim_samples/`](../../../data/sim_samples/)
 
 ## What it does
 Simulates the DeepMind humanoid (40.8 kg, Apache 2.0 model from the MuJoCo repo) in a 2 m deep pool for four scripted motions, 20 seconds each, and saves per-frame 3D keypoints with labels. Runs headless on a Mac in about 2 seconds.
@@ -16,7 +16,7 @@ Tested with MuJoCo 3.14.0, NumPy 2.5.3, Python 3.12.
 Add `--video` to also render one MP4 per motion to `data/sim_samples/videos/` from a corner "cctv" camera (needs ffmpeg). The scene has a visual-only pool: white walls and a see-through blue water box, 10 x 5 m, 2 m deep. The pool is only drawn, it has no collision and does not change the physics (the keypoint output is identical with or without it). Videos are not committed (`*.mp4` is gitignored).
 
 ## Multi-person pool scene
-[`sim/mujoco/pool_scene.py`](../../sim/mujoco/pool_scene.py) puts 5 people in one pool, 5 seconds by default (`--seconds` to change):
+[`sim/mujoco/pool_scene.py`](../../../sim/mujoco/pool_scene.py) puts 5 people in one pool, 5 seconds by default (`--seconds` to change):
 
 | Person | Motion | Where | Distress |
 |---|---|---|---|

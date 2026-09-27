@@ -1,7 +1,7 @@
 # model
 
-Owner: Person 3 (Model and evaluation)
+- `detector/` (Joanne, joannemiki57): pretrained YOLO person detection and head evidence. Optional fine-tune on the Mibugi dataset.
+- `pose/` (Sam, samkwak188): optional YOLO-Pose features for the yellow "distress" state.
+- `eval/` (Sam): metrics script, time to alarm, false alarms per hour, missed events.
 
-- Person detector and MOT tracker (model choice TBD, see docs/technical-summary.md)
-- Fine-tuning on our own pool footage (upper body only)
-- Evaluation: detection delay, false alarms per hour, sim vs real ablation
+See [docs/global/architecture.md](../docs/global/architecture.md).

@@ -22,8 +22,8 @@ Then visit `http://localhost:8000/frontend/`.
 6. Person 02 changes to red after about 9 seconds and triggers an alert.
 7. The sequence loops every 16 seconds.
 
-The results are intentionally scripted. The page is a user-interface prototype, not a real drowning classifier. It is designed so the scripted `stageFor()` output in `app.js` can later be replaced with backend WebSocket messages using the contract in `docs/dpark/data-model-camera-guide.md`.
+The results are intentionally scripted. The page is a user-interface prototype, not a real drowning classifier. It is designed so the scripted `stageFor()` output in `app.js` can later be replaced with backend WebSocket messages using the contract in `docs/global/architecture.md` (contract B).
 
 ## Owner
 
-Person 5 (Frontend): video/canvas overlay, alerts, clip playback, and feedback controls.
+David (dpark). Target scope: 4 video feeds, "enable monitoring" animation, canvas overlay (green, yellow, red, dashed missing), timers and reasons, alert panel with sound, pool outline tool, incident replay, reading `results.json` (contract B). See [docs/global/architecture.md](../docs/global/architecture.md) and [milestones](../docs/global/milestones.md).

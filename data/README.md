@@ -1,10 +1,10 @@
 # data
 
-Owner: Person 2 (Real data and data management)
+Owner: Sam (samkwak188)
 
-Raw video is NOT stored in git. It lives in shared storage (link TBD).
+Raw video is NOT stored in git.
 
 This folder holds:
-- Label guide (classes, when "drowning" starts)
-- Dataset version list and train and test splits
-- Scripts to convert sim and real data into the shared keypoint and label format
+- Clip list with source and license for every demo and test clip
+- Test case list and labels (split by recording session, never by frame)
+- `sim_samples/`: small MuJoCo outputs (keypoints, summaries)

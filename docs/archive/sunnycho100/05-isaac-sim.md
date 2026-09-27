@@ -2,7 +2,7 @@
 
 updated: 2026-09-26 · author: sunnycho100 (agent research)
 
-Starter script: [`sim/isaac/pool_replicator.py`](../../sim/isaac/pool_replicator.py) (**unverified**, not run; Isaac Sim cannot install on a Mac)
+Starter script: [`sim/isaac/pool_replicator.py`](../../../sim/isaac/pool_replicator.py) (**unverified**, not run; Isaac Sim cannot install on a Mac)
 
 ## Short answer
 - Use Isaac Sim for **labeled images of people partly in water**, to help the detector. Use MuJoCo for **motion**.

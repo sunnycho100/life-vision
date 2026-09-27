@@ -27,6 +27,7 @@ dist/
 # Isaac Sim renders
 sim/isaac/_out*/
 
+<<<<<<< Updated upstream
 # Training runs and sim outputs too big for git
 runs/
 data/sim_scenarios/yolo/
@@ -36,3 +37,8 @@ yolo11n.pt
 # Shared sim outputs (small, committed on purpose)
 !sim/simulation_videos/*.mp4
 !sim/mujoco/finetuned/*.pt
+=======
+# Model training data and runs
+model/_data/
+model/runs/
+>>>>>>> Stashed changes

@@ -14,20 +14,27 @@ sculling and eggbeater kick, streamline dive, the arm-pressing drowning response
 limp float. Every frame still gets exact labels, including how long
 each head has been underwater, which is what the drowning timer needs to be tested on.
 
+--seed 0 is the fixed demo layout. Other seeds shift positions, headings, timing, which
+character plays which role, the sky and the camera, for training data that doesn't
+repeat the test clip. --random re-poses everyone at random every frame (stills).
+
 Run from the repo root (see sim/isaac/README.md):
     set OMNI_KIT_ACCEPT_EULA=YES
-    sim\\isaac\\.venv\\Scripts\\python.exe sim\\isaac\\pool_video.py --seconds 20
+    sim\\isaac\\.venv\\Scripts\\python.exe sim\\isaac\\pool_video.py --seconds 20 --pathtrace 32 --subframes 1
 Output in --out:
     pool.mp4             the clean video (what the model sees)
     pool_labeled.mp4     same video with true boxes, head state and underwater timers drawn in
-    gt.txt               MOT format: frame,id,x,y,w,h,1,-1,-1,-1 (tight box, 1-based frame)
+    gt.txt               MOT format: frame,id,x,y,w,h,1,class,-1,-1 (full-body box, 1-based frame)
     labels.jsonl         one line per frame: every person's scenario, head height, state,
-                         seconds underwater, tight and loose boxes
+                         seconds underwater, full-body box and above-water box
+    yolo/images, yolo/labels   with --yolo-every K: every K-th frame for detector training.
+                         Classes: 0 = swimming (head above or partly above), 1 = underwater
 """
 import argparse
 import json
 import math
 import os
+import random
 import sys
 
 parser = argparse.ArgumentParser()
@@ -37,6 +44,9 @@ parser.add_argument("--width", type=int, default=1920, help="multiple of 16 for 
 parser.add_argument("--height", type=int, default=1088, help="multiple of 16 for H.264")
 parser.add_argument("--out", default="sim/isaac/_out_video")
 parser.add_argument("--sky", default="/NVIDIA/Assets/Skies/Clear/noon_grass_4k.hdr")
+parser.add_argument("--seed", type=int, default=0, help="0 = fixed demo layout; others vary it")
+parser.add_argument("--random", action="store_true", help="random people and poses every frame (stills)")
+parser.add_argument("--yolo-every", type=int, default=0, metavar="K", help="also save every K-th frame for YOLO")
 parser.add_argument("--subframes", type=int, default=4, help="RTX subframes per frame; more = cleaner, slower")
 parser.add_argument("--pathtrace", type=int, default=0, metavar="SPP",
                     help="use the path tracer with this many samples per frame (e.g. 64): real refraction, "
@@ -66,6 +76,7 @@ if args.pathtrace:
     st.set("/rtx/pathtracing/totalSpp", args.pathtrace)
     st.set("/rtx/pathtracing/optixDenoiser/enabled", True)
 
+rng = random.Random(args.seed)
 scene = PoolScene(simulation_app)
 print("character heights (m):", [round(h, 2) for h in scene.heights], flush=True)
 
@@ -128,17 +139,66 @@ def struggler(t):
 SCENARIOS = [("swimmer", swimmer), ("treader", treader), ("diver", diver),
              ("sinker", sinker), ("struggler", struggler)]
 
-scene.set_light(sky=args.sky)
-scene.sun_rot.Set((30, 0, 40))
+# Seed 0 keeps the demo layout. Other seeds shift each role in space and time and
+# reassign characters, so training clips don't repeat the test clip.
+cast = list(range(len(SCENARIOS)))
+shift = [(0.0, 0.0, 0.0, 0.0)] * len(SCENARIOS)
+if args.seed:
+    cast = rng.sample(range(len(scene.people)), len(SCENARIOS))
+    shift = [(rng.uniform(-0.6, 0.6), rng.uniform(-0.4, 0.4), rng.uniform(-60, 60), rng.uniform(-3, 6))
+             for _ in SCENARIOS]
 
-cam = rep.create.camera(position=(-POOL_L / 2 - 1.0, -POOL_W / 2 - 3.0, 4.2), look_at=(0.3, 0.3, -0.4),
-                        focal_length=18.0)
+
+def clamp_xy(x, y):
+    return max(-POOL_L / 2 + 0.6, min(POOL_L / 2 - 0.6, x)), max(-POOL_W / 2 + 0.5, min(POOL_W / 2 - 0.5, y))
+
+
+RANDOM_MOTIONS = {  # motion -> (tilt range, eye height range)
+    "tread": ((0, 15), (-0.5, 0.25)), "struggle": ((5, 20), (-0.3, 0.15)), "relaxed": ((0, 10), (-0.6, 0.3)),
+    "freestyle": ((80, 90), (-0.15, 0.05)), "limp": ((40, 88), (BOTTOM, -0.1)), "streamline": ((30, 80), (-1.3, -0.1)),
+}
+
+
+def random_frame():
+    """Stills mode: a random subset of people, each in a random motion, place and depth."""
+    n = rng.randint(2, 5)
+    chosen, spots, out = rng.sample(range(len(scene.people)), n), [], {}
+    for i in range(len(scene.people)):
+        if i not in chosen:
+            scene.park(i)
+            continue
+        for _ in range(50):
+            x, y = rng.uniform(-POOL_L / 2 + 0.8, POOL_L / 2 - 0.8), rng.uniform(-POOL_W / 2 + 0.6, POOL_W / 2 - 0.6)
+            if all(math.hypot(x - a, y - b) > 1.2 for a, b in spots):
+                break
+        spots.append((x, y))
+        motion = rng.choice(list(RANDOM_MOTIONS))
+        (t0, t1), (h0, h1) = RANDOM_MOTIONS[motion]
+        pose = getattr(anim, motion)(rng.uniform(0, 30))
+        info = scene.set_person(i, x, y, rng.uniform(h0, h1), rng.uniform(-180, 180), rng.uniform(t0, t1), pose)
+        info["scenario"] = motion
+        out[i] = info
+    return out
+
+
+scene.set_light(rng, sky=None if args.seed else args.sky)
+if not args.seed:
+    scene.sun_rot.Set((30, 0, 40))
+
+cam_pos, cam_look = (-POOL_L / 2 - 1.0, -POOL_W / 2 - 3.0, 4.2), (0.3, 0.3, -0.4)
+if args.seed:
+    cam_pos = tuple(c + rng.uniform(-0.6, 0.6) for c in cam_pos)
+    cam_look = tuple(c + rng.uniform(-0.4, 0.4) for c in cam_look)
+cam = rep.create.camera(position=cam_pos, look_at=cam_look, focal_length=18.0)
 rp = rep.create.render_product(cam, (args.width, args.height))
-annot = {k: rep.AnnotatorRegistry.get_annotator(k) for k in ["rgb", "bounding_box_2d_tight", "bounding_box_2d_loose"]}
+annot = {k: rep.AnnotatorRegistry.get_annotator(k) for k in ["rgb", "bounding_box_2d_tight", "camera_params"]}
 for a in annot.values():
     a.attach(rp)
 
 os.makedirs(args.out, exist_ok=True)
+if args.yolo_every:
+    for sub in ("images", "labels"):
+        os.makedirs(os.path.join(args.out, "yolo", sub), exist_ok=True)
 
 
 def video(name):
@@ -166,7 +226,8 @@ def owner(prim_path):
     return None
 
 
-def boxes(data):
+def tight_boxes(data):
+    """Visible-pixel boxes. The water counts as an occluder, so these cover only what is above the surface."""
     out = {}
     for pp, b in zip(data["info"]["primPaths"], data["data"]):
         i = owner(pp)
@@ -175,49 +236,116 @@ def boxes(data):
     return out
 
 
+def refract(pts, cam, n=1.333):
+    """Where the camera sees underwater points: replace each point below the surface (z < 0)
+    with the spot on the surface where its light ray exits toward the camera (Snell's law,
+    solved by bisection). Submerged limbs look shallower than they are."""
+    pts = pts.copy()
+    under = pts[:, 2] < 0
+    if not under.any() or cam[2] <= 0:
+        return pts
+    p = pts[under]
+    horiz = p[:, :2] - cam[:2]
+    dist = np.linalg.norm(horiz, axis=1) + 1e-9
+    h, d = cam[2], -p[:, 2]
+    lo, hi = np.zeros_like(dist), dist.copy()
+    for _ in range(40):  # r = horizontal distance from the camera to the exit point
+        r = (lo + hi) / 2
+        f = r / np.hypot(r, h) - n * (dist - r) / np.hypot(dist - r, d)
+        lo, hi = np.where(f < 0, r, lo), np.where(f < 0, hi, r)
+    r = (lo + hi) / 2
+    exit_xy = cam[:2] + horiz * (r / dist)[:, None]
+    pts[under] = np.column_stack([exit_xy, np.zeros(len(p))])
+    return pts
+
+
+def body_box(i, cp):
+    """Full-body box from the skeleton projected through the camera, underwater parts included
+    and shifted to where refraction makes them appear."""
+    view = np.array(cp["cameraViewTransform"], dtype=np.float64).reshape(4, 4)
+    proj = np.array(cp["cameraProjection"], dtype=np.float64).reshape(4, 4)
+    cam = np.linalg.inv(view)[3, :3]
+    pts = refract(np.array([[p[0], p[1], p[2]] for p in scene.body_points(i)]), cam)
+    pts = np.column_stack([pts, np.ones(len(pts))])
+    clip = pts @ view @ proj
+    if np.any(clip[:, 3] <= 0):
+        return None
+    ndc = clip[:, :2] / clip[:, 3:4]
+    px = (ndc[:, 0] + 1) / 2 * args.width
+    py = (1 - ndc[:, 1]) / 2 * args.height
+    x0, x1, y0, y1 = px.min(), px.max(), py.min(), py.max()
+    pad = 0.04 * max(x1 - x0, y1 - y0) + 3  # joints sit inside the skin
+    x0, y0 = max(0, int(x0 - pad)), max(0, int(y0 - pad))
+    x1, y1 = min(args.width - 1, int(x1 + pad)), min(args.height - 1, int(y1 + pad))
+    return [x0, y0, x1, y1] if x1 - x0 > 4 and y1 - y0 > 4 else None
+
+
 n_frames = int(args.seconds * args.fps)
 for _ in range(3):  # warm-up renders; the first path-traced frame can show the editor grid
     rep.orchestrator.step(rt_subframes=args.subframes)
 for f in range(n_frames):
     t = f / args.fps
-    people = {}
-    for i, (name, fn) in enumerate(SCENARIOS):
-        x, y, head, yaw, tilt, pose = fn(t)
-        info = scene.set_person(i, x, y, head, yaw, tilt, pose)
+    if args.random:
+        people = random_frame()
+        scene.set_light(rng)
+    else:
+        people = {}
+        for k, (name, fn) in enumerate(SCENARIOS):
+            i = cast[k]
+            dx, dy, dyaw, dt = shift[k]
+            x, y, head, yaw, tilt, pose = fn(max(0.0, t + dt))
+            x, y = clamp_xy(x + dx, y + dy)
+            info = scene.set_person(i, x, y, head, yaw + dyaw, tilt, pose)
+            info["scenario"] = name
+            people[i] = info
+        for i in range(len(scene.people)):
+            if i not in cast:
+                scene.park(i)
+    for i, info in people.items():
         if info["head_state"] == "below":
             under_since.setdefault(i, t)
         else:
             under_since.pop(i, None)
-        info["scenario"] = name
         info["seconds_below"] = round(t - under_since[i], 2) if i in under_since else 0.0
-        people[i] = info
 
-    scene.set_ripples(t)
+    scene.set_ripples(t + 7 * args.seed)
     for _ in range(2):
         simulation_app.update()
     rep.orchestrator.step(rt_subframes=args.subframes)
 
     frame = np.ascontiguousarray(annot["rgb"].get_data()[:, :, :3][:, :, ::-1])  # RGB -> BGR
-    tight, loose = boxes(annot["bounding_box_2d_tight"].get_data()), boxes(annot["bounding_box_2d_loose"].get_data())
+    tight = tight_boxes(annot["bounding_box_2d_tight"].get_data())
+    cp = annot["camera_params"].get_data()
     clean.send(np.ascontiguousarray(frame[:, :, ::-1]).tobytes())
+    save_yolo = args.yolo_every and f % args.yolo_every == 0
+    yolo_lines = []
 
     vis = frame.copy()
     for i, info in people.items():
-        info["tight_xyxy"], info["loose_xyxy"] = tight.get(i), loose.get(i)
-        if i in tight:
-            x0, y0, x1, y1 = tight[i]
-            gt.write(f"{f + 1},{i + 1},{x0},{y0},{x1 - x0},{y1 - y0},1,-1,-1,-1\n")
-        box = tight.get(i) or loose.get(i)
-        if box:
-            c = COLORS[info["head_state"]]
-            cv2.rectangle(vis, box[:2], box[2:], c, (3 if i in tight else 1) * LW)
-            label = f'#{i + 1} {info["scenario"]} {info["head_state"]}'
-            if info["seconds_below"] > 0:
-                label += f' {info["seconds_below"]:.1f}s under'
-            cv2.putText(vis, label, (box[0], max(int(28 * FS), box[1] - 6)), cv2.FONT_HERSHEY_SIMPLEX, FS, (0, 0, 0), 3 * LW)
-            cv2.putText(vis, label, (box[0], max(int(28 * FS), box[1] - 6)), cv2.FONT_HERSHEY_SIMPLEX, FS, c, LW)
+        body = body_box(i, cp)
+        info["body_xyxy"], info["above_water_xyxy"] = body, tight.get(i)
+        if body is None:
+            continue
+        cls = 1 if info["head_state"] == "below" else 0
+        x0, y0, x1, y1 = body
+        gt.write(f"{f + 1},{i + 1},{x0},{y0},{x1 - x0},{y1 - y0},1,{cls},-1,-1\n")
+        if save_yolo:
+            yolo_lines.append(f"{cls} {(x0 + x1) / 2 / args.width:.6f} {(y0 + y1) / 2 / args.height:.6f} "
+                              f"{(x1 - x0) / args.width:.6f} {(y1 - y0) / args.height:.6f}")
+        c = COLORS[info["head_state"]]
+        cv2.rectangle(vis, body[:2], body[2:], c, 2 * LW)
+        label = f'#{i + 1} {info["scenario"]} {info["head_state"]}'
+        if info["seconds_below"] > 0:
+            label += f' {info["seconds_below"]:.1f}s under'
+        cv2.putText(vis, label, (x0, max(int(28 * FS), y0 - 6)), cv2.FONT_HERSHEY_SIMPLEX, FS, (0, 0, 0), 3 * LW)
+        cv2.putText(vis, label, (x0, max(int(28 * FS), y0 - 6)), cv2.FONT_HERSHEY_SIMPLEX, FS, c, LW)
     cv2.putText(vis, f"t = {t:5.1f}s  (ground truth)", (10, int(48 * FS)), cv2.FONT_HERSHEY_SIMPLEX, 1.4 * FS, (255, 255, 255), 2 * LW)
     labeled.send(np.ascontiguousarray(vis[:, :, ::-1]).tobytes())
+    if save_yolo:
+        stem = f"s{args.seed}{'r' if args.random else ''}_{f:05d}"
+        cv2.imwrite(os.path.join(args.out, "yolo", "images", stem + ".jpg"), frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        with open(os.path.join(args.out, "yolo", "labels", stem + ".txt"), "w") as fh:
+            fh.write("\n".join(yolo_lines) + ("\n" if yolo_lines else ""))
     jl.write(json.dumps({"frame": f + 1, "t": round(t, 3), "people": {str(i + 1): v for i, v in people.items()}}) + "\n")
     if f % args.fps == 0:
         print(f"t={t:.0f}s frame {f + 1}/{n_frames}", flush=True)

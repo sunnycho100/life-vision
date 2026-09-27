@@ -126,6 +126,7 @@ class PoolScene:
             self.side_axis.append(xf.TransformDir(rig.L).GetNormalized())
             cache.Clear()
             self.heights.append(cache.ComputeWorldBound(p).ComputeAlignedRange().GetMax()[2])
+        self.last = [None] * len(self.people)
         for i in range(len(self.people)):
             self.park(i)
 
@@ -187,8 +188,21 @@ class PoolScene:
              * Gf.Matrix4d().SetRotate(Gf.Rotation(self.side_axis[i], tilt))
              * Gf.Matrix4d().SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), yaw - self.yaw0[i])))
         e = m.Transform(eyes)
-        self.ops[i].Set(m * Gf.Matrix4d().SetTranslate(Gf.Vec3d(x, y, head_z - e[2])))
+        m = m * Gf.Matrix4d().SetTranslate(Gf.Vec3d(x, y, head_z - e[2]))
+        self.ops[i].Set(m)
+        self.last[i] = (model, self.skel_xf[i] * m)
         return {"head_z": round(head_z, 3), "head_state": head_state(head_z)}
+
+    def body_points(self, i):
+        """World positions of person i's joints in their current pose, plus a point at the
+        top of the head, for projecting a full-body box (underwater parts included)."""
+        model, to_world = self.last[i]
+        pts = [to_world.Transform(mj.ExtractTranslation()) for mj in model]
+        rig = self.rigs[i]
+        eyes, neck = to_world.Transform(rig.eyes(model)), to_world.Transform(rig.pos(model, "NeckTwist02"))
+        up = (eyes - neck).GetNormalized()
+        pts.append(eyes + up * 0.14)
+        return pts
 
     def park(self, i):
         """Move an unused person far away. Toggling visibility instead makes the box

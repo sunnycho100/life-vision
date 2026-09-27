@@ -33,7 +33,7 @@ async def main(base):
           assert(c.observationAt(frames,.999)===null && c.observationAt(frames,1.31)===null && c.observationAt(frames,2)===null,'future, stale, failed hidden');
           const cache = new c.ObservationCache(async start=>[{media_time:start,status:'analyzed',detections:[]}]);
           for(let t=0;t<100;t+=10) await cache.ensure(t,true);
-          assert(cache.windows.size===3,'cache bound');
+          assert(cache.windows.size===4,'cache bound');
           let finish; const stale=new c.ObservationCache(()=>new Promise(r=>finish=r));
           const pending=stale.ensure(0); stale.clear(); finish([]); await pending;
           assert(stale.windows.size===0,'old source response discarded');
@@ -46,6 +46,7 @@ async def main(base):
         await page.click("#scan-button")
         assert "water height" in await page.locator("#message").text_content()
         await page.fill("#water-height", "1.1")
+        await page.locator('.more-settings summary').click()
         await page.fill("#analysis-start", "8")
         await page.fill("#analysis-end", "10")
         async with page.expect_response(lambda r: r.url.endswith('/api/jobs') and r.request.method == 'POST') as submitted:
@@ -53,7 +54,10 @@ async def main(base):
         submission = await submitted.value
         assert submission.status == 202, await submission.text()
         await page.wait_for_function("!document.querySelector('#twin-panel').hidden", timeout=90000)
-        await page.evaluate("video.currentTime=8.1")
+        # Wait for openReview's initial seek before testing a user seek.
+        await page.wait_for_function("!video.seeking && video.currentTime > 8.008 && document.querySelector('#person-count').textContent !== '\\u2014'")
+        # The merged tracker confirms identities after consecutive observations.
+        await page.evaluate("video.currentTime=8.25")
         await page.wait_for_function("Number(document.querySelector('#person-count').textContent)>0", timeout=15000)
         assert await page.locator("#stage").get_attribute("data-view") == "video"
         assert await page.evaluate("video.playbackRate") == 1

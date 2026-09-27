@@ -23,6 +23,22 @@ from backend.review import install_review_routes
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/javascript", ".mjs")
 DEFAULT_MODEL = ROOT / "artifacts/models/rfdetr-nano/manifest.json"
+REFERENCE_URL = "https://www.youtube.com/watch?v=PuAfTA2wf7o"
+REFERENCE_VIDEO = ROOT / "artifacts/reference/wave-pool-PuAfTA2wf7o.mp4"
+
+
+def fetch_reference(path=REFERENCE_VIDEO):
+    """Download the wave pool reference once (H.264, which the browser player needs); later runs reuse the file."""
+    if path.is_file():
+        return path
+    from yt_dlp import YoutubeDL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    print("Downloading reference recording", flush=True)
+    options = {"format": "bv*[vcodec^=avc1]+ba[ext=m4a]/b[vcodec^=avc1]", "merge_output_format": "mp4",
+               "outtmpl": str(path.with_suffix(".%(ext)s")), "quiet": True, "noprogress": True}
+    with YoutubeDL(options) as ydl:
+        ydl.download([REFERENCE_URL])
+    return path
 
 
 class JobRequest(BaseModel):
@@ -63,7 +79,7 @@ def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, bac
         sha = sha or digest(path)
         metadata = probe(path)
         source = {**metadata, "id": sha, "sha256": sha, "path": str(path), "url": f"/api/sources/{sha}/video",
-                  "mapping_end": min(95, metadata["duration"]) if sha == REFERENCE_SHA else metadata["duration"]}
+                  "mapping_end": min(95, metadata["duration"]) if sha == REFERENCE_SHA or path == video else metadata["duration"]}
         write_json(sources / (sha + ".json"), source)
         return source
 
@@ -87,7 +103,7 @@ def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, bac
             return {"available": False}
         try:
             source = register(video)
-            return {"available": True, **public(source), "source": "https://www.youtube.com/watch?v=PuAfTA2wf7o"}
+            return {"available": True, **public(source), "source": REFERENCE_URL}
         except Exception as error:
             return {"available": False, "error": str(error), "sha256": digest(video)}
 
@@ -139,6 +155,12 @@ def create_app(video_path=None, data_dir=None, model_manifest=DEFAULT_MODEL, bac
             raise HTTPException(404, "Source file no longer exists")
         return FileResponse(path, media_type=mimetypes.guess_type(path)[0] or "video/mp4")
 
+    @app.get("/api/sources/{source_id}/jobs")
+    def source_jobs(source_id: str):
+        get_source(source_id)
+        jobs = (read_json(path) for path in (data / "jobs").glob("*/status.json"))
+        return sorted((j for j in jobs if j.get("source_id") == source_id), key=lambda j: j["created"], reverse=True)
+
     @app.post("/api/jobs", status_code=202)
     def create_job(body: JobRequest):
         try:
@@ -189,6 +211,11 @@ if __name__ == "__main__":
     parser.add_argument("--provider")
     parser.add_argument("--worker-python", type=Path)
     args = parser.parse_args()
+    if args.video is None:
+        try:
+            args.video = fetch_reference()
+        except Exception as error:
+            print(f"Reference download failed, continuing with upload only: {error}", flush=True)
     uvicorn.run(create_app(args.video, args.data_dir, args.model_manifest, args.backend, args.provider, args.worker_python),
                 host=args.host, port=args.port)
 

@@ -101,6 +101,7 @@ async def main(base):
         await page.wait_for_function("!document.querySelector('#reference-button').disabled")
         await page.click("#reference-button")
         await page.wait_for_function("!document.querySelector('#calibrate-panel').hidden")
+        await page.locator('.more-settings summary').click()
         await page.fill("#analysis-start", "8")
         await page.fill("#analysis-end", "90")
         await page.click("#scan-button")

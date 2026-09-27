@@ -4,11 +4,12 @@ const $ = id => document.getElementById(id);
 const video = $('video'), stage = $('stage'), overlay = $('overlay'), context = overlay.getContext('2d');
 const panels = ['source', 'calibrate', 'scan', 'twin'];
 let phase = 'source', corners = [[.085, .08], [.95, .14], [.96, .91], [.22, .91]];
-let source = null, reference, config = null, job = null, twin = null, importedFrames = null;
-let sourceGeneration = 0, frameTime = 0, currentDetections = [], threshold = .5, refreshPending = false, pollBusy = false;
+let source = null, reference, config = null, job = null, lastJob = null, twin = null, importedFrames = null;
+let sourceGeneration = 0, frameTime = 0, currentDetections = [], threshold = .2, refreshPending = false, pollBusy = false;
 let reviewAnalysis = null, reviewBusy = false, reviewSubmitting = false, incidents = [], selectedIncident = null, currentTracks = [], trackRenderKey = '';
 let soundEnabled = false, alertAudio = null;
 const seenEvents = new Set();
+let detectionTracks = null;
 const handles = [];
 const cache = new ObservationCache(async (start, end) => {
   const response = await api('/api/jobs/' + job.id + '/observations?start=' + start + '&end=' + end);
@@ -25,7 +26,9 @@ async function api(url, options) {
   if (!response.ok) throw Error(typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail));
   return body;
 }
-function message(text) {$('message').textContent = text; $('message').hidden = !text;}
+function message(text) {$('message').textContent = text; $('message').hidden = !text; if (text) setMenu(true);}
+function setMenu(open) {document.body.classList.toggle('menu-open', open); $('menu-toggle').setAttribute('aria-expanded', open);}
+$('menu-toggle').onclick = () => setMenu(!document.body.classList.contains('menu-open'));
 function setPhase(next) {
   phase = next;
   panels.forEach((name, i) => {
@@ -54,7 +57,8 @@ function showPosition(position) {
     ? `Estimated position: X ${position.x.toFixed(1)} m · Z ${position.z.toFixed(1)} m from corner 1. ${position.calibration === 'user-measured' ? 'User-measured plane' : 'Approximate dimensions'}. Height is assumed at the water surface; marker size is symbolic.`
     : 'Pause and select a 3D marker to inspect its estimated position across the water.';
 }
-function clearDisplay() {currentDetections = []; currentTracks = []; renderTrackStates(null); twin?.updatePeople([]); showPosition(null); $('person-count').textContent = '—'; $('pool-count').textContent = '—';}
+function clearDisplay() {currentDetections = []; currentTracks = []; detectionTracks = null; renderTrackStates(null); twin?.updatePeople([]); showPosition(null); $('person-count').textContent = '—'; $('pool-count').textContent = '—'; $('hud').hidden = true;}
+const TRACK_COLORS = {safe: '#3ddc84', missing: '#9aa3ab', warning: '#ffb000', alarm: '#ff4d4d'};
 function draw() {
   const width = $('video-pane').clientWidth, height = $('video-pane').clientHeight, dpr = Math.min(devicePixelRatio, 2);
   if (overlay.width !== Math.round(width * dpr) || overlay.height !== Math.round(height * dpr)) {
@@ -63,11 +67,28 @@ function draw() {
   context.setTransform(dpr, 0, 0, dpr, 0, 0); context.clearRect(0, 0, width, height);
   if (!source) return;
   const r = videoRect(), point = p => [r.x + p[0] * r.width, r.y + p[1] * r.height];
-  if (phase === 'calibrate' || mappingValid()) {
+  if (phase === 'calibrate') { // outline only while placing corners; review shows just the person boxes
     context.beginPath(); corners.forEach((p, i) => {const xy = point(p); i ? context.lineTo(...xy) : context.moveTo(...xy);}); context.closePath();
     context.strokeStyle = '#abf2d8'; context.fillStyle = '#81f3cf09'; context.lineWidth = 1.3; context.stroke(); context.fill();
   }
   handles.forEach((handle, i) => {const p = point(corners[i]); handle.style.left = p[0] + 'px'; handle.style.top = p[1] + 'px';});
+  if (detectionTracks) { // tracked people: stable IDs, lost people held at their last box
+    for (const track of detectionTracks) {
+      const b = track.bbox_xyxy_normalized, a = point(b.slice(0, 2)), z = point(b.slice(2));
+      const color = TRACK_COLORS[track.visible ? 'safe' : track.level] ?? TRACK_COLORS.missing;
+      context.strokeStyle = color; context.fillStyle = color; context.lineWidth = track.visible ? 2 : 1.6;
+      context.setLineDash(track.visible ? [] : [5, 4]);
+      context.strokeRect(a[0], a[1], z[0] - a[0], z[1] - a[1]);
+      context.setLineDash([]);
+      const text = 'Person ' + track.person_id + (track.visible ? '' : ' · not seen ' + track.missing_s.toFixed(1) + 's');
+      context.font = '600 11px system-ui, sans-serif';
+      const w = context.measureText(text).width, y = Math.max(r.y + 14, a[1] - 4);
+      context.fillStyle = '#000000b0'; context.fillRect(a[0] - 2, y - 11, w + 4, 14);
+      context.fillStyle = color; context.fillText(text, a[0], y);
+    }
+    overlay.dataset.boxCount = detectionTracks.filter(tr => tr.visible).length;
+    return;
+  }
   for (const detection of currentDetections) {
     const b = detection.bbox_xyxy_normalized, a = point(b.slice(0, 2)), z = point(b.slice(2));
     const color = detection.review_severity === 'urgent' ? '#ff8d8d' : detection.review_severity === 'warn' ? '#f0c971' : '#9be6ce';
@@ -108,7 +129,7 @@ function once(target, event, timeout = 20000) {
 async function connect(info, isReference = false) {
   const generation = ++sourceGeneration;
   video.pause(); clearDisplay(); cache.clear(); resetReview(); importedFrames = null; job = null; config = null; source = null;
-  $('resume-inference').hidden = true; $('zoom-warning').hidden = true;
+  $('resume-inference').hidden = true; $('zoom-warning').hidden = true; $('last-analysis').hidden = true; lastJob = null;
   const ready = once(video, 'loadeddata'); video.src = info.url; video.load(); await ready;
   if (generation !== sourceGeneration) return;
   if (!Number.isFinite(video.duration) || Math.abs(video.duration - info.duration) > .15 || video.videoWidth !== info.width || video.videoHeight !== info.height) throw Error('Browser and decoder disagree on video geometry or duration. Re-export as an upright H.264 MP4.');
@@ -124,6 +145,11 @@ async function connect(info, isReference = false) {
   if (Math.abs(video.currentTime - target) > .001) {const seeked = once(video, 'seeked'); video.currentTime = target; await seeked;}
   frameTime = video.currentTime;
   setPhase('calibrate'); $('scan-button').textContent = 'Analyze recording'; $('tracking-status').textContent = 'Define the pool region, then analyze the recording.';
+  const past = await api('/api/sources/' + info.id + '/jobs').catch(() => []);
+  if (generation !== sourceGeneration) return;
+  lastJob = past.find(j => j.state === 'completed') ?? null;
+  $('last-analysis').hidden = !lastJob;
+  if (lastJob) $('last-analysis').textContent = 'Review last analysis · ' + timeLabel(Math.round(lastJob.start)) + '–' + timeLabel(Math.round(lastJob.end));
 }
 $('reference-button').onclick = () => connect(reference, true).catch(e => message(e.message));
 $('video-file').onchange = async e => {
@@ -214,6 +240,10 @@ async function openReview() {
   }
   await refresh();
 }
+$('last-analysis').onclick = async () => {
+  try {config = readConfig(); twin?.configure(config); video.pause(); job = lastJob; cache.clear(); resetReview(); await openReview();}
+  catch (error) {message(error.message);}
+};
 $('review-progress').onclick = () => openReview().catch(e => message(e.message));
 async function refresh() {
   if (!source || !job || importedFrames || refreshPending) return;
@@ -234,13 +264,19 @@ function updateDisplay() {
   currentTracks = tracked && observation ? observation.tracks : [];
   currentDetections = observation ? (tracked ? currentTracks.filter(t => ['visible', 'outside'].includes(t.state) && Math.abs(t.last_seen - observation.media_time) < .001) : observation.detections).filter(d => d.confidence === null || d.confidence >= threshold) : [];
   renderTrackStates(tracked ? observation : null);
+  detectionTracks = !tracked ? observation?.tracks ?? null : null;
+  if (detectionTracks) {
+    detectionTracks = detectionTracks.filter(t => !t.visible || t.confidence >= threshold);
+    currentDetections = detectionTracks.filter(t => t.visible);
+  }
   $('person-count').textContent = observation ? currentDetections.length : '—';
   $('inference-time').textContent = observation?.inference_ms ? Math.round(observation.inference_ms) : '—';
   $('pool-count').textContent = observation && mappingValid() ? currentDetections.filter(d => inside(boxAnchor(d.bbox_xyxy_normalized), config.corners)).length : '—';
+  $('hud').hidden = !observation;
+  $('hud-people').textContent = currentDetections.length;
   if (phase === 'twin' || phase === 'scan') $('tracking-status').textContent = observation
     ? currentDetections.length + ' person boxes · ' + (importedFrames ? 'imported observations' : tracked ? 'persistent track replay' : 'RF-DETR Nano') + (mappingValid() ? '' : ' · pool outline needs calibration')
     : 'Analysis unavailable at this time';
-  $('view-badge').textContent = stage.dataset.view === 'video' ? tracked ? 'TRACK REPLAY / REVIEW' : 'PERSON DETECTIONS' : 'APPROXIMATE POSITIONS';
   if (twin && stage.dataset.view !== 'video') twin.updatePeople(mappingValid() ? currentDetections : []);
   $('zoom-warning').hidden = stage.dataset.view === 'video' || !config || mappingValid();
 }
@@ -256,7 +292,6 @@ async function setView(view) {
   stage.dataset.view = view;
   $('zoom-warning').hidden = view === 'video' || !config || mappingValid();
   document.querySelectorAll('button[data-view]').forEach(button => button.classList.toggle('selected', button.dataset.view === view));
-  $('view-badge').textContent = view === 'video' ? 'PERSON DETECTIONS' : 'APPROXIMATE POSITIONS';
 }
 document.querySelectorAll('button[data-view]').forEach(button => button.onclick = () => setView(button.dataset.view));
 function recalibrate() {video.pause(); setPhase('calibrate'); $('mapping-end').value = video.currentTime >= source.mapping_end ? source.duration : source.mapping_end; $('scan-button').textContent = 'Save pool mapping';}

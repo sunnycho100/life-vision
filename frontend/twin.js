@@ -1,9 +1,9 @@
 import * as THREE from './vendor/three.module.js';
-import {homography, surfacePosition} from './core.mjs';
+import {homography, surfacePosition, cameraPose} from './core.mjs';
 
 export class PoolTwin {
   constructor(canvas, video, onSelect = () => {}) {
-    this.canvas = canvas;
+    this.canvas = canvas; this.video = video;
     this.renderer = new THREE.WebGLRenderer({canvas, antialias: true, alpha: true});
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.scene = new THREE.Scene();
@@ -41,7 +41,7 @@ export class PoolTwin {
       drag = null;
     });
     canvas.addEventListener('pointercancel', () => drag = null);
-    canvas.addEventListener('wheel', e => {e.preventDefault(); this.distance = THREE.MathUtils.clamp(this.distance * Math.exp(e.deltaY * .001), this.size * .8, this.size * 4);}, {passive: false});
+    canvas.addEventListener('wheel', e => {e.preventDefault(); this.distance = THREE.MathUtils.clamp(this.distance * Math.exp(e.deltaY * .001), this.size * .8, this.size * 6);}, {passive: false});
     this.resize = new ResizeObserver(() => this.resizeCanvas()); this.resize.observe(canvas);
   }
 
@@ -64,7 +64,8 @@ export class PoolTwin {
   configure(config) {
     this.config = config; this.clearGroup(this.pool); this.clearGroup(this.people); this.lastPeople = null; this.onSelect(null); this.canvas.dataset.markerCount = '0';
     const {width: w, length: l, depth: d, water: h, corners} = config;
-    this.size = Math.max(w, l); this.resetCamera();
+    this.size = Math.max(w, l); this.pose = cameraPose(corners, w, l, config.aspect || this.video.videoWidth / this.video.videoHeight || 16 / 9); this.resetCamera();
+    this.map = homography(corners, [[-w / 2, -l / 2], [w / 2, -l / 2], [w / 2, l / 2], [-w / 2, l / 2]]);
     const forward = homography([[0, 0], [1, 0], [1, 1], [0, 1]], corners);
     const tile = new THREE.MeshStandardMaterial({color: 0x2c5960, roughness: .8, side: THREE.DoubleSide});
     const floor = new THREE.Mesh(new THREE.BoxGeometry(w, .14, l), tile); floor.position.y = -.07; this.pool.add(floor);
@@ -108,9 +109,36 @@ export class PoolTwin {
     label('1: origin (0, 0)', -w / 2, -l / 2);
     label(`X: ${w} m`, w / 2, -l / 2);
     label(`Z: ${l} m`, -w / 2, l / 2);
+    this.pool.add(this.cameraMarker(this.pose, w, l, h));
   }
 
-  resetCamera() {this.theta = .52; this.phi = .82; this.distance = this.size * 1.95;}
+  // Estimated recording camera: body, height label, and view lines to the mapped water corners.
+  cameraMarker(pose, w, l, h) {
+    const group = new THREE.Group(), color = 0xf2d39b, eye = new THREE.Vector3(pose.x, h + pose.height, pose.z);
+    const body = new THREE.Group(); body.position.copy(eye);
+    const s = this.size / 30, solid = new THREE.MeshStandardMaterial({color, roughness: .5});
+    body.add(new THREE.Mesh(new THREE.BoxGeometry(.9 * s, .7 * s, 1.3 * s), solid));
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(.22 * s, .3 * s, .5 * s, 20), solid);
+    lens.rotation.x = -Math.PI / 2; lens.position.z = -.85 * s; body.add(lens);
+    body.lookAt(pose.aim[0], h, pose.aim[1]); body.rotateY(Math.PI); // lookAt points +z; the lens sits on -z
+    group.add(body);
+    const line = (points, opacity) => new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({color, transparent: true, opacity}));
+    [[-w / 2, -l / 2], [w / 2, -l / 2], [w / 2, l / 2], [-w / 2, l / 2]].forEach(([x, z]) => group.add(line([eye, new THREE.Vector3(x, h, z)], .35)));
+    const label = document.createElement('canvas'); label.width = 384; label.height = 64;
+    const ctx = label.getContext('2d'); ctx.font = '600 26px Inter, Arial, sans-serif'; ctx.fillStyle = '#f2d39b'; ctx.textAlign = 'center';
+    ctx.fillText('Camera · ~' + Math.round(pose.height) + ' m up (est.)', 192, 40);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(label), transparent: true, depthTest: false}));
+    sprite.scale.set(9 * s, 1.5 * s, 1); sprite.position.set(eye.x, eye.y + 1.6 * s, eye.z); group.add(sprite);
+    return group;
+  }
+
+  resetCamera() {
+    // Orbit around the midpoint of pool and camera, viewed from the side so both stay in frame.
+    const {x, z, height} = this.pose;
+    this.target = new THREE.Vector3(x / 2, this.config.water + height / 3, z / 2);
+    this.theta = Math.atan2(x, z) - 1.1; this.phi = .62;
+    this.distance = Math.max(this.size * 1.95, Math.hypot(x, z, height) * 2.1);
+  }
   reveal() {this.revealStart = performance.now();}
 
   updatePeople(detections) {
@@ -142,8 +170,8 @@ export class PoolTwin {
     const phi = this.phi - (1 - eased) * .2;
     // Preserve horizontal coverage when the split/mobile viewport becomes narrow.
     const distance = this.distance * Math.max(1, 1 / this.camera.aspect);
-    this.camera.position.set(distance * Math.sin(this.theta) * Math.cos(phi), distance * Math.sin(phi), distance * Math.cos(this.theta) * Math.cos(phi));
-    this.camera.lookAt(0, this.config.water, 0);
+    this.camera.position.set(distance * Math.sin(this.theta) * Math.cos(phi), distance * Math.sin(phi), distance * Math.cos(this.theta) * Math.cos(phi)).add(this.target);
+    this.camera.lookAt(this.target);
     this.renderer.render(this.scene, this.camera);
   }
 }

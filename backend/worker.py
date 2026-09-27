@@ -7,6 +7,7 @@ from pathlib import Path
 from backend.common import digest, read_json, sampled_frames, write_json
 from backend.detector import create_detector
 from backend.jobs import observation_db
+from backend.tracking import PoolTracker, is_scene_cut
 
 
 def run(directory):
@@ -21,19 +22,29 @@ def run(directory):
         if digest(source["path"]) != spec["source_sha256"]:
             raise ValueError("Source file changed after registration.")
         detector = create_detector(spec["model_manifest_path"], spec["backend"], spec["provider"])
+        if spec.get("tiling"):
+            from backend.detector import TiledDetector
+            detector = TiledDetector(detector, **spec["tiling"])
         spec["runtime"] = detector.runtime
         write_json(directory / "manifest.json", spec)
         status.update(state="running", runtime=detector.runtime)
         write_json(directory / "status.json", status)
         durations = []
+        tracker = PoolTracker(spec["sample_hz"], **spec.get("tracking", {}))
+        prev_rgb = None
         for index, pts, base, t, rgb in sampled_frames(source["path"], spec["sample_hz"], spec["start"], spec["end"]):
             before = time.perf_counter()
+            cut = is_scene_cut(prev_rgb, rgb)
+            if cut:
+                tracker.scene_cut()
+            prev_rgb = rgb
             detections = detector.predict(rgb, spec["stored_threshold"])
             elapsed = (time.perf_counter() - before) * 1000
             durations.append(elapsed)
             observation = {"schema": "detections/1", "source_id": spec["source_id"], "job_id": spec["job_id"],
                            "frame_index": index, "pts": pts, "time_base": base, "media_time": t,
-                           "status": "analyzed", "detections": detections, "inference_ms": elapsed}
+                           "status": "analyzed", "detections": detections, "inference_ms": elapsed,
+                           "scene_cut": cut, "tracks": tracker.update(t, detections)}
             db.execute("INSERT INTO observations VALUES (?, ?)", (t, json.dumps(observation, allow_nan=False)))
             db.commit()
             last_time = t

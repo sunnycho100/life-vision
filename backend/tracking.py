@@ -21,17 +21,20 @@ DEFAULTS = {
     "part_ratio": 0.4,      # a contained box smaller than this share of the bigger one is a part box
     "start_frames": 2,      # consecutive frames before a track gets an ID
     "lost_buffer_s": 5.0,   # ByteTrack keeps a lost track this long
-    "stitch_s": 5.0,        # a new track can continue a person lost within this many seconds
-    "stitch_scale": 3.0,    # ... if it appears within this many box sizes of where they were lost
-    "stitch_min": 0.06,     # ... or within this share of the frame, so tiny far-away people get a usable radius.
-                            # Wave pool clip: returning swimmers reappear 1.6-3 box sizes away, 0.5-4 s later.
-    "resurface_speed": 0.5, # after stitch_s, a held person can still be reclaimed: the search radius grows by
-                            # this many box sizes per second lost (swimmers drift), capped at resurface_max
-    "resurface_max": 4.0,
+    # One ID continues onto a box only if the move is physically plausible (used for ByteTrack re-matches and for
+    # re-linking a new track to a lost person). At 40-50 s of the wave pool clip, IDs hopped 0.05-0.09 of the frame
+    # between neighbours in 0.1 s, and a lifeguard swimming to a submerged girl inherited her ID.
+    "jitter": 0.4,          # allowed centre shift, in box sizes, for detector wobble (arms up, partly under)
+    "max_speed": 0.06,      # plus this share of the frame per second of gap (a swimmer's drift)
+    "stitch_max": 0.10,     # never more than this share of the frame, however long the gap
+    "size_ratio": 1.7,      # box heights must agree within this factor
     "back_show_s": 2.0,     # after a reliable person comes back from a gap of hold_s or more, flag them this long
     "mass_loss": 0.4,       # fewer boxes than this share of last frame's visible people (3+) = glitch frame, skipped
     "hold_s": 1.0,          # draw a lost person's last box this long as "missing" before any warning
     "warn_s": 5.0,          # missing this long: warning (yellow)
+    "struggle_window_s": 0.0,   # > 0: also warn when missing warn_s in total within this window, even with brief
+                                # resurfacing in between. Off by default: on the wave pool clip a 10 s window caught the
+                                # girl at 40 s but also raised about 30 false warnings in 60 s from ordinary flicker.
     "alarm_s": 12.0,        # missing this long: alarm (red)
     "forget_s": 20.0,       # stop showing a missing person after this long
     "edge": 0.02,           # last box within this distance of the frame edge = left the view
@@ -111,23 +114,27 @@ class PoolTracker:
         e = self.cfg["edge"]
         return b[0] <= e or b[1] <= e or b[2] >= 1 - e or b[3] >= 1 - e
 
+    def _plausible(self, p, box, t):
+        """Could this box be the same person as p (last seen at p["box"]) given the time since then?"""
+        lb, gap = p["box"], max(t - p["last_seen"], 0.0)
+        size = max(lb[2] - lb[0], lb[3] - lb[1], box[2] - box[0], box[3] - box[1])
+        d = np.hypot((box[0] + box[2] - lb[0] - lb[2]) / 2, (box[1] + box[3] - lb[1] - lb[3]) / 2)
+        ratio = (box[3] - box[1]) / max(lb[3] - lb[1], 1e-6)
+        allowed = min(self.cfg["jitter"] * size + self.cfg["max_speed"] * gap, self.cfg["stitch_max"])
+        return d <= allowed and 1 / self.cfg["size_ratio"] <= ratio <= self.cfg["size_ratio"]
+
     def _stitch(self, t, box, visible):
-        """Nearest person lost recently near this new box, or None."""
+        """Nearest person lost within forget_s whose last box this new box plausibly continues, or None.
+        Only brand-new tracks get here, so an already-tracked passer-by can't take a lost person's ID."""
         cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
         best, best_d = None, None
         for pid, p in self.people.items():
             lost = t - p["last_seen"]
-            if pid in visible or lost <= 0 or lost > self.cfg["forget_s"]:
+            if pid in visible or lost <= 0 or lost > self.cfg["forget_s"] or not self._plausible(p, box, t):
                 continue
             lb = p["box"]
-            size = max(lb[2] - lb[0], lb[3] - lb[1])
             d = np.hypot(cx - (lb[0] + lb[2]) / 2, cy - (lb[1] + lb[3]) / 2)
-            # Short gaps use the tight gate. Longer gaps (while the missing box is still shown) widen with time,
-            # so a swimmer who resurfaces a little further away clears their own warning instead of leaving it
-            # red until forget_s. Only brand-new tracks get here, so an already-tracked passer-by can't take it.
-            reach = self.cfg["stitch_scale"] if lost <= self.cfg["stitch_s"] else min(
-                self.cfg["stitch_scale"] + self.cfg["resurface_speed"] * (lost - self.cfg["stitch_s"]), self.cfg["resurface_max"])
-            if d <= max(reach * size, self.cfg["stitch_min"]) and (best_d is None or d < best_d):
+            if best_d is None or d < best_d:
                 best, best_d = pid, d
         return best
 
@@ -144,6 +151,10 @@ class PoolTracker:
             xyxy=boxes.reshape(-1, 4), confidence=scores, class_id=np.zeros(len(boxes), int)))
         if len(tracked):
             tracked = tracked[tracked.tracker_id >= 0]  # tracks not yet confirmed come back as -1
+        for box, tid in zip(tracked.xyxy.tolist(), tracked.tracker_id.tolist()):
+            pid = self.person_of.get(tid)
+            if pid is not None and "box" in self.people[pid] and not self._plausible(self.people[pid], box, t):
+                del self.person_of[tid]  # ByteTrack re-matched this track onto someone else: give the box its own ID
         visible = {self.person_of[tid] for tid in tracked.tracker_id if tid in self.person_of}
         out = []
         for box, tid, conf in zip(tracked.xyxy.tolist(), tracked.tracker_id.tolist(), tracked.confidence.tolist()):
@@ -167,6 +178,8 @@ class PoolTracker:
                 visible.add(pid)
             pid = self.person_of[tid]
             p = self.people[pid]
+            if "last_seen" in p and t - p["last_seen"] > 1.5 / self.hz:  # remember out-of-sight stretches
+                p["gaps"] = [g for g in p.get("gaps", []) if g[1] > t - self.cfg["struggle_window_s"]] + [(p["last_seen"], t)]
             p.update(box=[float(v) for v in box], last_seen=t, conf=float(conf), at_edge=self._at_edge(box))
             p.setdefault("seen", []).append(t)
             p["seen"] = [s for s in p["seen"] if s > t - 2.0]
@@ -178,6 +191,8 @@ class PoolTracker:
             if pid in visible or "box" not in p:
                 continue
             missing = t - p["last_seen"]
+            window = t - self.cfg["struggle_window_s"]
+            out_recently = missing + sum(max(0.0, end - max(start, window)) for start, end in p.get("gaps", []))
             if "reliable" not in p:  # decided once, at the moment the person is lost
                 recent = [s for s in p.get("seen", []) if s > p["last_seen"] - 2.0]
                 p["reliable"] = (p["last_seen"] - p["first_seen"] >= self.cfg["reliable_s"]
@@ -188,15 +203,15 @@ class PoolTracker:
             if missing < self.cfg["hold_s"]:
                 level = "safe"
             else:
-                level = "alarm" if missing >= self.cfg["alarm_s"] else "warning" if missing >= self.cfg["warn_s"] else "missing"
+                level = "alarm" if missing >= self.cfg["alarm_s"] else "warning" if out_recently >= self.cfg["warn_s"] else "missing"
             out.append({"person_id": pid, "bbox_xyxy_normalized": p["box"], "confidence": round(p["conf"], 3),
-                        "visible": False, "level": level, "missing_s": round(missing, 2), "continued": False})
+                        "visible": False, "level": level, "missing_s": round(out_recently, 2), "continued": False})
         self._last_visible, self._last_out = len(visible), out
         return out
 
 
 if __name__ == "__main__":  # smoke check: one person lost 2 s and back nearby keeps the same ID
-    tr = PoolTracker(5, stitch_s=5.0)
+    tr = PoolTracker(5)
     box = [0.40, 0.40, 0.46, 0.55]
     ids = []
     for f in range(60):
@@ -219,7 +234,7 @@ if __name__ == "__main__":  # smoke check: one person lost 2 s and back nearby k
         people = tr.update(t, [] if 5 <= fr % 20 < 9 else [{"bbox_xyxy_normalized": [x, 0.4, x + 0.06, 0.55], "confidence": 0.9}])
         seen = [p["person_id"] for p in people]
         assert len(seen) == len(set(seen)), f"duplicate person IDs at t={t}: {seen}"
-    tr = PoolTracker(5)  # resurfacing after 8 s, 2.5 box sizes away, reclaims the same person
+    tr = PoolTracker(5)  # resurfacing after 8 s, 0.08 of the frame away (inside stitch_max), reclaims the same person
     far = [0.70, 0.40, 0.76, 0.55]
     got = set()
     for f in range(100):
@@ -229,7 +244,7 @@ if __name__ == "__main__":  # smoke check: one person lost 2 s and back nearby k
         elif t < 12:
             people = tr.update(t, [])
         else:
-            moved = [far[0] + 0.15, far[1], far[2] + 0.15, far[3]]
+            moved = [far[0] + 0.08, far[1], far[2] + 0.08, far[3]]
             people = tr.update(t, [{"bbox_xyxy_normalized": moved, "confidence": 0.9}])
             got |= {p["person_id"] for p in people}
     assert got == {1} and all(p["visible"] for p in people), f"resurfaced person should keep ID 1, got {sorted(got)}"
@@ -240,4 +255,13 @@ if __name__ == "__main__":  # smoke check: one person lost 2 s and back nearby k
         people = tr.update(f / 5, [{"bbox_xyxy_normalized": b, "confidence": 0.9} for b in crowd])
     glitch = tr.update(4.0, [{"bbox_xyxy_normalized": crowd[0], "confidence": 0.9}])
     assert glitch is people and all(p["visible"] for p in glitch), "one-frame mass loss should be skipped"
+    tr = PoolTracker(5)  # a different swimmer showing up 0.09 away 0.3 s after someone is lost gets a new ID
+    girl = [0.20, 0.40, 0.24, 0.48]
+    for f in range(20):
+        tr.update(f / 5, [{"bbox_xyxy_normalized": girl, "confidence": 0.9}])
+    tr.update(4.0, [])
+    guard = [girl[0] + 0.09, girl[1], girl[2] + 0.09, girl[3]]
+    for f in range(4):
+        people = tr.update(4.2 + f / 5, [{"bbox_xyxy_normalized": guard, "confidence": 0.9}])
+    assert {p["person_id"] for p in people if p["visible"]} != {1} and any(p["person_id"] == 1 and not p["visible"] for p in people), people
     print("tracking smoke check ok")

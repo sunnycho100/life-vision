@@ -1,5 +1,7 @@
 # SAM analysis: pool monitoring and hackathon feasibility
 
+> Latest decision: [ML system and camera-to-review workflow](ml-system-decision.md). It records the implemented YOLOv8 baseline, precise tracking/event/clip design, new checkpoint audits, temporal-model direction and Claude Code review. The research below is earlier context.
+
 Date: 2026-09-26
 
 Repository reviewed: `sunnycho100/we-fall-we-die` at `1b650fab3975e60f61b982d7221c6f875b4dd3ba`

@@ -16,9 +16,9 @@ Status: 12-hour hackathon build. The plan is agreed, the MuJoCo simulation works
 
 Continuing in Cursor or another coding environment? Also read [`CURSOR_HANDOFF.md`](CURSOR_HANDOFF.md).
 
-## Frontend interaction demo
+## Review app
 
-Open [`frontend/index.html`](frontend/index.html) directly, or serve the repository and visit `/frontend/`. It accepts a pool video and demonstrates the Matrix-style activation, tracking overlays, green, yellow, and red decisions, timers, alerts, and incident history with scripted model results.
+Sam's local review app lives in [`frontend/`](frontend/) with its server in [`backend/`](backend/). It runs RF-DETR Nano and the person tracker over a pool video and shows "Person N" boxes that turn yellow and red when someone stays missing. Setup is in [`frontend/README.md`](frontend/README.md).
 
 Old research lives in [docs/archive/](docs/archive/).
 

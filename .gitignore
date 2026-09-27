@@ -23,6 +23,11 @@ node_modules/
 dist/
 
 .DS_Store
+
+# Downloaded browser runtimes/model and local prototype artifacts
+frontend/vendor/
+artifacts/
+*.webm
 .codex-build/
 
 # Isaac Sim renders

@@ -67,3 +67,5 @@ body.menu-open .setup-panel{transform:none}body.menu-open .scan-chip{left:calc(5
 /* Review opens with the saved tracks directly; the separate review-event build step is not shown */
 .review-build{display:none}
 #event-review{display:none!important}  /* review queue not shown in the demo UI */
+.videos-button{padding:0 0 14px;font-size:12px;color:#a9c9c4}
+.videos-button:hover{color:var(--mint)}

@@ -68,7 +68,7 @@ class JobManager:
                     "source": source, "start": start, "end": min(end, source["duration"]), "sample_hz": 10,
                     "sampling": "first distinct frame at/after target; source PTS minus stream start",
                     "stored_threshold": .1, "display_threshold": .5,
-                    "tiling": {"grid": [3, 2], "overlap": .25} if self.backend == "python" else False,
+                    "tiling": {"grid": [3, 2], "overlap": .25} if self.backend == "python" and model.get("tiling", True) else False,
                     "model_manifest": model, "model_manifest_sha256": digest(self.manifest_path),
                     "backend": self.backend, "provider": self.provider, "pipeline_version": 2,
                     "worker_python": self.worker_python}

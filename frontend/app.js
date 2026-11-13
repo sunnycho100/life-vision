@@ -31,6 +31,7 @@ function setMenu(open) {document.body.classList.toggle('menu-open', open); $('me
 $('menu-toggle').onclick = () => setMenu(!document.body.classList.contains('menu-open'));
 function setPhase(next) {
   phase = next;
+  $('videos-button').hidden = next === 'source';
   panels.forEach((name, i) => {
     $(name + '-panel').hidden = name !== next;
     const step = document.querySelector('[data-step="' + name + '"]');
@@ -97,6 +98,7 @@ function draw() {
     context.strokeStyle = '#abf2d8'; context.fillStyle = '#81f3cf09'; context.lineWidth = 1.3; context.stroke(); context.fill();
   }
   handles.forEach((handle, i) => {const p = point(corners[i]); handle.style.left = p[0] + 'px'; handle.style.top = p[1] + 'px';});
+  if (job?.demo_video && phase === 'twin') {overlay.dataset.boxCount = 0; return;} // boxes are burned into the demo video; stats still update
   if (detectionTracks) { // tracked people: stable IDs, lost people held at their last box
     for (const track of detectionTracks) {
       const b = track.bbox_xyxy_normalized, a = point(b.slice(0, 2)), z = point(b.slice(2));
@@ -223,6 +225,11 @@ $('back-button').onclick = async () => {
   catch (e) {message(e.message); return;}
   sourceGeneration++; video.pause(); source = null; job = null; cache.clear(); resetReview(); clearDisplay(); setPhase('source');
 };
+// Back to the video list from any screen. A running analysis keeps going on the server.
+$('videos-button').onclick = () => {
+  sourceGeneration++; video.pause(); source = null; job = null; cache.clear(); resetReview(); clearDisplay();
+  video.removeAttribute('src'); video.load(); $('video-empty').hidden = false; setPhase('source');
+};
 function readConfig() {
   const width = Number($('pool-width').value), length = Number($('pool-length').value), depth = Number($('pool-depth').value), water = Number($('water-height').value), end = Number($('mapping-end').value);
   if (corners.length === 4 ? !validQuad(corners) : !validPolygon(corners)) throw Error(corners.length === 4 ? 'Place four separated corners clockwise around a convex water region.' : 'Move the corners so the outline edges do not cross.');
@@ -313,15 +320,14 @@ async function refresh() {
   if (!source || !job || importedFrames || refreshPending) return;
   refreshPending = true;
   try {
+    await cache.ensure(video.currentTime, job.state === 'completed');  // our tracker's boxes, always
     if (reviewAnalysis?.state === 'completed') await trackCache.ensure(video.currentTime, true);
-    else await cache.ensure(video.currentTime, job.state === 'completed');
   }
   catch (error) {message(error.message);}
   finally {refreshPending = false;}
 }
 function updateDisplay() {
   if (!source || video.seeking) {clearDisplay(); return;}
-  if (job?.demo_video && phase === 'twin') {currentDetections = []; detectionTracks = null; $('hud').hidden = true; return;}  // boxes are in the video
   const time = video.paused ? video.currentTime : frameTime;
   // Always draw our tracker's green/yellow/red boxes (observation.tracks). Sam's review-analysis replay is only used
   // when a run has no tracker output of its own.
@@ -351,6 +357,7 @@ function updateDisplay() {
   const returns = (detectionTracks ?? []).filter(cameBack);
   $('hud-back').hidden = !returns.length;
   $('hud-back').textContent = returns.map(tr => tr.person_id + ' · back ' + tr.back_after_s.toFixed(1) + 's').join('   ');
+  if (job?.demo_video && phase === 'twin') $('hud').hidden = true; // the demo video has its own on-screen text
   if (phase === 'twin' || phase === 'scan') $('tracking-status').textContent = observation
     ? currentDetections.length + ' person boxes · ' + (importedFrames ? 'imported observations' : tracked ? 'persistent track replay' : job?.model ?? 'RF-DETR Nano') + (mappingValid() ? '' : ' · pool outline needs calibration')
     : 'Analysis unavailable at this time';
